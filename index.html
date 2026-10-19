@@ -4,126 +4,104 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Control de Cuentas por Cobrar</title>
-  <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
-  <!-- Supabase JS Library -->
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 </head>
-<body class="bg-gray-100 text-gray-800 font-sans">
+<body class="bg-gray-100 text-gray-800 p-6">
 
-  <script>
-    // Configuración de conexión con Supabase
-    // REEMPLAZA ESTOS VALORES CON LOS DE TU PANEL DE SUPABASE
-    const SUPABASE_URL = 'https://dwklqjswdgoxqooblmeg.supabase.co'; 
-    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR3a2xxanN3ZGdveHFvb2JsbWVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzOTE5MTIsImV4cCI6MjEwNzk2NzkxMn0.S_TaeU4YGwj4lL3pGzYaLgSmeIAGHQlWoz3wCH2HUqY'; 
+  <div class="max-w-5xl mx-auto space-y-6">
+    <div class="flex justify-between items-center bg-white p-6 rounded-lg shadow">
+      <div>
+        <h1 class="text-2xl font-bold text-gray-900">Control de Cuentas por Cobrar</h1>
+        <p class="text-sm text-gray-500">Sistema integrado con Supabase</p>
+      </div>
+      <div id="status-badge" class="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-semibold">
+        Conectando...
+      </div>
+    </div>
 
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  </script>
+    <!-- KPIs -->
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div class="bg-white p-5 rounded-lg shadow border-l-4 border-blue-500">
+        <span class="text-sm text-gray-500 font-medium">Facturas Registradas</span>
+        <p class="text-3xl font-bold text-gray-900 mt-1" id="total-facturas">0</p>
+      </div>
+      <div class="bg-white p-5 rounded-lg shadow border-l-4 border-emerald-500">
+        <span class="text-sm text-gray-500 font-medium">Clientes Registrados</span>
+        <p class="text-3xl font-bold text-gray-900 mt-1" id="total-clientes">0</p>
+      </div>
+    </div>
 
-  <!-- Estructura del Dashboard -->
-  <div class="flex h-screen overflow-hidden">
-    <!-- Sidebar -->
-    <aside class="w-64 bg-slate-900 text-white flex flex-col p-4">
-      <h1 class="text-xl font-bold mb-6 text-emerald-400">Control CxC</h1>
-      <nav class="space-y-2">
-        <button onclick="showSection('kpis')" class="w-full text-left py-2 px-3 hover:bg-slate-800 rounded">📊 Panel Principal</button>
-        <button onclick="showSection('facturas')" class="w-full text-left py-2 px-3 hover:bg-slate-800 rounded">📄 Control Facturación</button>
-        <button onclick="showSection('pagos')" class="w-full text-left py-2 px-3 hover:bg-slate-800 rounded">💵 Registro de Pagos</button>
-        <button onclick="showSection('estados')" class="w-full text-left py-2 px-3 hover:bg-slate-800 rounded">📋 Estados de Cuenta</button>
-      </nav>
-    </aside>
-
-    <!-- Contenido Principal -->
-    <main class="flex-1 p-6 overflow-y-auto">
-      
-      <!-- Seccion KPIs -->
-      <section id="sec-kpis" class="block space-y-6">
-        <h2 class="text-2xl font-bold">Panel Principal - Resumen Financiero</h2>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div class="bg-white p-5 rounded-lg shadow border-l-4 border-blue-500">
-            <span class="text-sm text-gray-500 font-medium">Total Pendiente</span>
-            <p class="text-2xl font-bold text-gray-900 mt-1" id="kpi-pendiente">Cargando...</p>
-          </div>
-          <div class="bg-white p-5 rounded-lg shadow border-l-4 border-emerald-500">
-            <span class="text-sm text-gray-500 font-medium">Cobros del Mes</span>
-            <p class="text-2xl font-bold text-gray-900 mt-1" id="kpi-cobros">Cargando...</p>
-          </div>
-          <div class="bg-white p-5 rounded-lg shadow border-l-4 border-red-500">
-            <span class="text-sm text-gray-500 font-medium">Facturas Vencidas</span>
-            <p class="text-2xl font-bold text-gray-900 mt-1" id="kpi-vencidas">Cargando...</p>
-          </div>
-        </div>
-      </section>
-
-      <!-- Seccion Facturas -->
-      <section id="sec-facturas" class="hidden space-y-6">
-        <h2 class="text-2xl font-bold">Control de Facturación</h2>
-        <div class="bg-white p-4 rounded-lg shadow overflow-x-auto">
-          <table class="w-full text-left border-collapse">
-            <thead>
-              <tr class="border-b bg-gray-50 text-xs text-gray-500 uppercase">
-                <th class="p-3">Folio</th>
-                <th class="p-3">Cliente</th>
-                <th class="p-3">Fecha</th>
-                <th class="p-3">Total</th>
-                <th class="p-3">Moneda</th>
-                <th class="p-3">Estatus</th>
-              </tr>
-            </thead>
-            <tbody id="tabla-facturas">
-              <tr><td colspan="6" class="p-4 text-center text-gray-500">Cargando facturas...</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <!-- Secciones Pagos y Estados -->
-      <section id="sec-pagos" class="hidden">
-        <h2 class="text-2xl font-bold mb-4">Registro de Pagos</h2>
-        <div class="bg-white p-6 rounded-lg shadow max-w-lg">
-          <p class="text-gray-600">Formulario para registrar abonos parciales o totales vinculados a facturas abiertas de Supabase.</p>
-        </div>
-      </section>
-
-      <section id="sec-estados" class="hidden">
-        <h2 class="text-2xl font-bold mb-4">Estados de Cuenta por Cliente</h2>
-        <div class="bg-white p-6 rounded-lg shadow">
-          <p class="text-gray-600">Consulta de saldos agrupados por moneda (MXN / USD).</p>
-        </div>
-      </section>
-
-    </main>
+    <!-- Tabla de Facturas -->
+    <div class="bg-white p-6 rounded-lg shadow">
+      <h2 class="text-lg font-bold mb-4">Listado de Facturas</h2>
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse">
+          <thead>
+            <tr class="border-b bg-gray-50 text-xs text-gray-500 uppercase">
+              <th class="p-3">Folio</th>
+              <th class="p-3">Fecha</th>
+              <th class="p-3">Monto Total</th>
+              <th class="p-3">Moneda</th>
+              <th class="p-3">Estatus</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-facturas">
+            <tr><td colspan="5" class="p-4 text-center text-gray-500">Cargando datos...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
   </div>
 
   <script>
-    function showSection(name) {
-      document.querySelectorAll('main > section').forEach(el => el.classList.add('hidden'));
-      document.getElementById('sec-' + name).classList.remove('hidden');
-    }
+    // CREDENCIALES EXACTAS DE TU PROYECTO
+    const SUPABASE_URL = 'https://dwklqjswdgoxqooblmeg.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_IZkd3lhniH8Fyb615xpeNw_51QkM...'; // Reemplaza por tu clave completa que empieza con sb_publishable_...
 
-    async function loadData() {
+    const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    async function cargarDatos() {
+      const badge = document.getElementById('status-badge');
       try {
-        const { data: invoices, error } = await supabase.from('invoices').select('*');
-        if (error) throw error;
-        
+        // Consultar facturas
+        const { data: invoices, error: invErr } = await client.from('invoices').select('*');
+        if (invErr) throw invErr;
+
+        // Consultar clientes
+        const { data: customers, error: custErr } = await client.from('customers').select('*');
+        if (custErr) throw custErr;
+
+        badge.className = 'px-3 py-1 bg-emerald-100 text-emerald-800 rounded-full text-sm font-semibold';
+        badge.innerText = 'Conectado con Éxito';
+
+        document.getElementById('total-facturas').innerText = invoices.length;
+        document.getElementById('total-clientes').innerText = customers.length;
+
         let html = '';
-        invoices.forEach(inv => {
-          html += `<tr class="border-b">
-            <td class="p-3 font-semibold">${inv.invoice_number}</td>
-            <td class="p-3">${inv.customer_id}</td>
-            <td class="p-3">${inv.invoice_date}</td>
-            <td class="p-3 font-bold">${inv.total}</td>
-            <td class="p-3">${inv.currency}</td>
-            <td class="p-3"><span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded">${inv.status}</span></td>
-          </tr>`;
-        });
-        document.getElementById('tabla-facturas').innerHTML = html || '<tr><td colspan="6" class="p-4 text-center">No hay facturas registradas</td></tr>';
+        if (invoices.length > 0) {
+          invoices.forEach(inv => {
+            html += `<tr class="border-b">
+              <td class="p-3 font-semibold">${inv.invoice_number}</td>
+              <td class="p-3">${inv.invoice_date}</td>
+              <td class="p-3 font-bold">$${parseFloat(inv.total).toLocaleString('es-MX', {minimumFractionDigits: 2})}</td>
+              <td class="p-3">${inv.currency}</td>
+              <td class="p-3"><span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded">${inv.status}</span></td>
+            </tr>`;
+          });
+        } else {
+          html = '<tr><td colspan="5" class="p-4 text-center text-gray-500">No hay facturas en la base de datos.</td></tr>';
+        }
+        document.getElementById('tabla-facturas').innerHTML = html;
+
       } catch (err) {
-        console.error('Error al conectar con Supabase:', err);
+        console.error('Error al conectar:', err);
+        badge.className = 'px-3 py-1 bg-red-100 text-red-800 rounded-full text-sm font-semibold';
+        badge.innerText = 'Error: ' + (err.message || 'Sin acceso');
       }
     }
 
-    document.addEventListener('DOMContentLoaded', loadData);
+    document.addEventListener('DOMContentLoaded', cargarDatos);
   </script>
 </body>
 </html>
