@@ -649,10 +649,18 @@
         if (inv.currency === 'MXN') saldoMXN += parseFloat(inv.balance);
         if (inv.currency === 'USD') saldoUSD += parseFloat(inv.balance);
 
-        const pagosFactura = globalPayments
-          .filter(p => p.invoice_id === (inv.invoice_id || inv.id))
-          .sort((a, b) => String(b.payment_date || '').localeCompare(String(a.payment_date || '')));
-        const totalPagado = money(inv.paid);
+        const invoiceId = String(inv.invoice_id || inv.id || '');
+
+const pagosFactura = globalPayments
+  .filter(p => String(p.invoice_id || '') === invoiceId)
+  .sort((a, b) =>
+    String(b.payment_date || '').localeCompare(String(a.payment_date || ''))
+  );
+
+const totalPagado = pagosFactura.reduce(
+  (sum, p) => sum + Number(p.amount || 0),
+  0
+);
         const fmtEstado = value => Number(value || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const pagosRecientes = pagosFactura.length
           ? pagosFactura.slice(0, 2).map(p => `${escapeHtml(p.payment_date || 'Sin fecha')}: $${fmtEstado(p.amount)} ${escapeHtml(p.currency || inv.currency || '')}`).join('<br>')
