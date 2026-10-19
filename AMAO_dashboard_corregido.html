@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>AMAO | Control de Cuentas por Cobrar</title>
+
+  <style>
+    :root { color-scheme: light; --ink:#20252b; --muted:#737b85; --line:#e5e7eb; --paper:#f5f6f7; --card:#ffffff; --accent:#68745f; --accent-dark:#4f5c48; }
+    html { scroll-behavior:smooth; }
+    body { background:var(--paper)!important; color:var(--ink)!important; font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif!important; letter-spacing:-.01em; }
+    header { background:#20252b!important; box-shadow:0 8px 28px rgba(20,24,28,.08)!important; }
+    header .bg-emerald-500 { background:#c8d0c1!important; color:#20252b!important; border-radius:12px!important; }
+    header h1 { font-size:1.05rem!important; letter-spacing:-.035em!important; }
+    header p { color:#b7bdc3!important; letter-spacing:.01em; }
+    #status-badge { border-radius:999px!important; }
+    .max-w-7xl { max-width:1540px!important; }
+    main { min-width:0; }
+    aside nav { position:sticky; top:100px; border:1px solid #e6e8ea!important; border-radius:18px!important; padding:10px!important; box-shadow:0 4px 18px rgba(22,27,32,.035)!important; }
+    .nav-btn { min-height:44px; border-radius:11px!important; transition:background .18s ease,color .18s ease,transform .18s ease; }
+    .nav-btn:hover { transform:translateX(2px); }
+    .nav-btn.bg-slate-900 { background:#252b31!important; color:#fff!important; box-shadow:0 3px 8px rgba(32,37,43,.12); }
+    main > section { animation:sectionIn .22s ease both; }
+    @keyframes sectionIn { from {opacity:.55;transform:translateY(4px)} to {opacity:1;transform:translateY(0)} }
+    h2 { letter-spacing:-.035em!important; font-size:1.45rem!important; font-weight:750!important; }
+    main > section#sec-kpis > h2:after { content:""; display:block; width:42px; height:3px; background:#aab5a1; border-radius:3px; margin-top:12px; }
+    main > section#sec-kpis .grid > div { border:1px solid #e5e7eb!important; border-left:0!important; border-radius:16px!important; box-shadow:0 4px 18px rgba(22,27,32,.035)!important; position:relative; overflow:hidden; padding:22px!important; }
+    main > section#sec-kpis .grid > div:before { content:""; position:absolute; inset:0 auto 0 0; width:4px; background:#aab5a1; }
+    main > section#sec-kpis .grid > div:nth-child(2):before { background:#c9ad7c; }
+    main > section#sec-kpis .grid > div:nth-child(3):before { background:#9ba9b8; }
+    main > section#sec-kpis .grid > div:nth-child(4):before { background:#879a83; }
+    main > section#sec-kpis .grid p { font-variant-numeric:tabular-nums; letter-spacing:-.045em; }
+    .bg-white.rounded-xl, .bg-white.p-6, .bg-white.p-4 { border-radius:16px!important; box-shadow:0 4px 18px rgba(22,27,32,.035)!important; }
+    .border-slate-200, .border-slate-200\/80 { border-color:#e5e7eb!important; }
+    table { border-collapse:separate!important; border-spacing:0; }
+    thead th { background:#f7f8f8!important; color:#69717b!important; font-size:10px!important; letter-spacing:.09em!important; white-space:nowrap; }
+    tbody td { border-color:#eef0f2!important; vertical-align:middle; }
+    tbody tr { transition:background .15s ease; }
+    tbody tr:hover { background:#f8f9f8!important; }
+    input,select,textarea { border-color:#d9dde1!important; border-radius:10px!important; transition:border-color .15s ease,box-shadow .15s ease; }
+    input:focus,select:focus,textarea:focus { outline:none!important; border-color:#879a83!important; box-shadow:0 0 0 3px rgba(135,154,131,.16)!important; }
+    button[type=submit] { background:#4f5c48!important; border-radius:11px!important; box-shadow:none!important; transition:background .15s ease,transform .15s ease; }
+    button[type=submit]:hover { background:#3e4939!important; transform:translateY(-1px); }
+    .overflow-x-auto { scrollbar-width:thin; }
+    #detalle-estado-cuenta .grid > div { border-radius:14px!important; box-shadow:none!important; background:#fff!important; border-color:#e5e7eb!important; }
+    #detalle-estado-cuenta .grid > div:first-child span, #detalle-estado-cuenta .grid > div:last-child span { color:#68745f!important; }
+    #detalle-estado-cuenta .grid > div p { color:#252b31!important; }
+    .section-toolbar { display:flex; flex-wrap:wrap; gap:10px; align-items:center; justify-content:space-between; }
+    .search-input { min-width:220px; }
+    .subtle-label { font-size:10px; text-transform:uppercase; letter-spacing:.1em; font-weight:750; color:#7b838c; }
+    .table-shell { background:#fff; border:1px solid #e5e7eb; border-radius:16px; overflow:hidden; box-shadow:0 4px 18px rgba(22,27,32,.035); }
+    .table-shell .overflow-x-auto { overflow-x:auto; }
+    .pill-neutral { display:inline-flex; align-items:center; border-radius:999px; padding:4px 9px; font-size:10px; font-weight:750; letter-spacing:.04em; background:#f0f2f3; color:#535b64; }
+    .payment-detail { line-height:1.6; white-space:normal; min-width:150px; }
+    .aging-badge { display:inline-flex; border-radius:999px; padding:4px 8px; font-size:10px; font-weight:800; white-space:nowrap; }
+    .aging-ok { background:#edf4ec; color:#476044; } .aging-soon { background:#fff4dc; color:#8a5b12; } .aging-late { background:#fde8e7; color:#a3332e; }
+    @media (max-width:767px) {
+      .max-w-7xl.mx-auto.px-4.sm\\:px-6.lg\\:px-8.py-6 { padding-top:16px!important; gap:16px!important; }
+      aside nav { position:static; display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:4px; }
+      .nav-btn { padding:10px!important; font-size:12px!important; }
+      h2 { font-size:1.25rem!important; }
+      main > section#sec-kpis .grid > div { padding:17px!important; }
+      .search-input { min-width:100%; width:100%; }
+    }
+  </style>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <!-- Supabase JS Library -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans min-h-screen flex flex-col">
+
+  <!-- Header principal -->
+  <header class="bg-slate-900 text-white shadow-lg sticky top-0 z-50">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
+      <div class="flex items-center space-x-3">
+        <div class="bg-emerald-500 text-slate-900 p-2 rounded-lg font-black text-xl">CxC</div>
+        <div>
+          <h1 class="text-xl font-bold tracking-tight">Sistema CxC & Facturación</h1>
+          <p class="text-xs text-slate-400">Control Financiero · Cartón & Foam · Multimoneda (MXN/USD)</p>
+        </div>
+      </div>
+      <div id="status-badge" class="px-3 py-1 bg-amber-500/20 text-amber-300 border border-amber-500/30 rounded-full text-xs font-semibold flex items-center gap-2">
+        <span class="w-2 h-2 rounded-full bg-amber-400 animate-pulse"></span>
+        Conectando...
+      </div>
+    </div>
+  </header>
+
+  <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 flex-1 w-full flex flex-col md:flex-row gap-6">
+    
+    <!-- Menú Lateral -->
+    <aside class="w-full md:w-64 space-y-2 shrink-0">
+      <nav class="bg-white p-3 rounded-xl shadow-sm border border-slate-200/80 space-y-1">
+        <button onclick="showSection('kpis', this)" class="nav-btn w-full text-left py-2.5 px-4 rounded-lg font-medium text-sm flex items-center gap-3 bg-slate-900 text-white">
+          📊 Panel General
+        </button>
+        <button onclick="showSection('analitica', this)" class="nav-btn w-full text-left py-2.5 px-4 rounded-lg font-medium text-sm flex items-center gap-3 text-slate-600 hover:bg-slate-100">📈 Analítica financiera</button>
+        <button onclick="showSection('facturas', this)" class="nav-btn w-full text-left py-2.5 px-4 rounded-lg font-medium text-sm flex items-center gap-3 text-slate-600 hover:bg-slate-100">
+          📄 Control de Facturas
+        </button>
+        <button onclick="showSection('nueva-factura', this)" class="nav-btn w-full text-left py-2.5 px-4 rounded-lg font-medium text-sm flex items-center gap-3 text-slate-600 hover:bg-slate-100">
+          ➕ Registrar Factura
+        </button>
+        <button onclick="showSection('registrar-pago', this)" class="nav-btn w-full text-left py-2.5 px-4 rounded-lg font-medium text-sm flex items-center gap-3 text-slate-600 hover:bg-slate-100">
+          💵 Registrar Pago / Abono
+        </button>
+        <button onclick="showSection('estados', this)" class="nav-btn w-full text-left py-2.5 px-4 rounded-lg font-medium text-sm flex items-center gap-3 text-slate-600 hover:bg-slate-100">
+          📋 Estado de Cuenta
+        </button>
+      </nav>
+    </aside>
+
+    <!-- Contenido Principal -->
+    <main class="flex-1 space-y-6">
+
+      <!-- SECTION: PANEL GENERAL (KPIs) -->
+      <section id="sec-kpis" class="space-y-6">
+        <div class="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-2">
+          <div>
+            <p class="subtle-label mb-2">AMAO · CONTROL FINANCIERO</p>
+            <h2 class="text-xl font-bold text-slate-900">Resumen financiero de cartera</h2>
+            <p class="text-sm text-slate-500 mt-2">Visión general de facturación, saldos pendientes y clientes.</p>
+          </div>
+          <span class="pill-neutral">Cartera · MXN / USD</span>
+        </div>
+        
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-blue-500">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Total Facturado</span>
+            <p class="text-2xl font-black text-slate-900 mt-1" id="kpi-total-facturado">$0.00</p>
+            <span class="text-xs text-slate-500 mt-1 block" id="kpi-count-facturas">0 facturas registradas</span>
+          </div>
+          <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-amber-500">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Saldo Pendiente (MXN)</span>
+            <p class="text-2xl font-black text-amber-600 mt-1" id="kpi-saldo-mxn">$0.00</p>
+            <span class="text-xs text-slate-500 mt-1 block">Por cobrar en pesos</span>
+          </div>
+          <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-indigo-500">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Saldo Pendiente (USD)</span>
+            <p class="text-2xl font-black text-indigo-600 mt-1" id="kpi-saldo-usd">$0.00</p>
+            <span class="text-xs text-slate-500 mt-1 block">Por cobrar en dólares</span>
+          </div>
+          <div class="bg-white p-5 rounded-xl shadow-sm border border-slate-200 border-l-4 border-l-emerald-500">
+            <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Clientes Activos</span>
+            <p class="text-2xl font-black text-slate-900 mt-1" id="kpi-total-clientes">0</p>
+            <span class="text-xs text-slate-500 mt-1 block">En base de datos</span>
+          </div>
+        </div>
+      </section>
+
+
+      <section id="sec-analitica" class="hidden space-y-5">
+        <div><p class="subtle-label mb-2">AMAO · INTELIGENCIA DE CARTERA</p><h2>Analítica financiera</h2><p class="text-sm text-slate-500 mt-2">Indicadores, tendencias y antigüedad de saldos. MXN y USD se presentan por separado.</p></div>
+        <div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <div class="bg-white p-5 rounded-xl border border-slate-200"><span class="subtle-label">Facturas vencidas</span><p id="kpi-vencidas" class="text-2xl font-black text-rose-700 mt-2">0</p><p id="kpi-vencidas-monto" class="text-xs text-slate-500 mt-1">—</p></div>
+          <div class="bg-white p-5 rounded-xl border border-slate-200"><span class="subtle-label">Por vencer en 7 días</span><p id="kpi-por-vencer" class="text-2xl font-black text-amber-700 mt-2">0</p><p class="text-xs text-slate-500 mt-1">Facturas abiertas</p></div>
+          <div class="bg-white p-5 rounded-xl border border-slate-200"><span class="subtle-label">Pagos registrados</span><p id="kpi-pagos" class="text-2xl font-black mt-2">0</p><p id="kpi-pagos-monto" class="text-xs text-slate-500 mt-1">—</p></div>
+          <div class="bg-white p-5 rounded-xl border border-slate-200"><span class="subtle-label">Cobranza MXN</span><p id="kpi-recuperacion" class="text-2xl font-black text-emerald-700 mt-2">—</p><p class="text-xs text-slate-500 mt-1">Pagos MXN / facturación MXN</p></div>
+        </div>
+        <div class="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <div class="bg-white p-5 rounded-xl border border-slate-200"><h3 class="font-bold mb-3">Facturas por estatus</h3><div style="height:280px"><canvas id="chart-status"></canvas></div></div>
+          <div class="bg-white p-5 rounded-xl border border-slate-200"><h3 class="font-bold mb-3">Saldo por línea de negocio</h3><div style="height:280px"><canvas id="chart-business"></canvas></div></div>
+          <div class="bg-white p-5 rounded-xl border border-slate-200"><h3 class="font-bold mb-3">Facturación mensual · últimos 12 meses</h3><div style="height:280px"><canvas id="chart-monthly"></canvas></div></div>
+          <div class="bg-white p-5 rounded-xl border border-slate-200"><h3 class="font-bold mb-3">Antigüedad de saldos vencidos</h3><div style="height:280px"><canvas id="chart-aging"></canvas></div></div>
+        </div>
+      </section>
+
+      <!-- SECTION: CONTROL DE FACTURAS -->
+      <section id="sec-facturas" class="hidden space-y-4">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <h2 class="text-xl font-bold text-slate-900">Listado de Facturas</h2>
+          <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+            <input id="filter-search" type="search" oninput="renderFacturas()" placeholder="Buscar folio o cliente..." class="search-input text-xs bg-white border border-slate-300 rounded-lg p-2.5 font-medium" aria-label="Buscar folio o cliente" />
+            <select id="filter-business" onchange="renderFacturas()" class="text-xs bg-white border border-slate-300 rounded-lg p-2 font-medium">
+              <option value="ALL">Todas las líneas (Cartón / Foam)</option>
+              <option value="Carton">Cartón</option>
+              <option value="Foam">Foam</option>
+            </select>
+            <select id="filter-currency" onchange="renderFacturas()" class="text-xs bg-white border border-slate-300 rounded-lg p-2 font-medium">
+              <option value="ALL">Todas las Monedas</option>
+              <option value="MXN">MXN ($)</option>
+              <option value="USD">USD ($)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse text-sm">
+              <thead>
+                <tr class="bg-slate-50 border-b border-slate-200 text-xs text-slate-500 uppercase font-semibold">
+                  <th class="p-3.5">Folio</th>
+                  <th class="p-3.5">Cliente</th>
+                  <th class="p-3.5">Negocio</th>
+                  <th class="p-3.5">Emisión / Vencimiento</th>
+                  <th class="p-3.5">Monto Original</th>
+                  <th class="p-3.5">Pagos / Fechas</th>
+                  <th class="p-3.5">Saldo Pendiente</th>
+                  <th class="p-3.5">Días vencidos</th><th class="p-3.5">Estatus</th>
+                </tr>
+              </thead>
+              <tbody id="tabla-facturas" class="divide-y divide-slate-100">
+                <tr><td colspan="9" class="p-6 text-center text-slate-400">Cargando cartera...</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <!-- SECTION: NUEVA FACTURA -->
+      <section id="sec-nueva-factura" class="hidden space-y-4">
+        <h2 class="text-xl font-bold text-slate-900">Registrar Nueva Factura</h2>
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 max-w-2xl">
+          <form onsubmit="guardarFactura(event)" class="space-y-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Cliente</label>
+              <select id="select-cliente-factura" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium">
+                <option value="">Cargando clientes...</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Folio / N° Factura</label>
+                <input type="text" id="input-folio" required placeholder="Ej. F-2026-001" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm">
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Línea de Negocio</label>
+                <select id="select-negocio" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium">
+                  <option value="Carton">Cartón</option>
+                  <option value="Foam">Foam</option>
+                </select>
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Fecha de Emisión</label>
+                <input type="date" id="input-fecha-emision" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm">
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Fecha Vencimiento</label>
+                <input type="date" id="input-fecha-vencimiento" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm">
+              </div>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Moneda</label>
+                <select id="select-moneda" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium">
+                  <option value="MXN">MXN - Pesos Mexicanos</option>
+                  <option value="USD">USD - Dólares</option>
+                </select>
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Monto Total</label>
+                <input type="number" step="0.01" id="input-monto" required placeholder="0.00" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-bold">
+              </div>
+            </div>
+            <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg text-sm shadow transition">
+              💾 Guardar Factura en Sistema
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <!-- SECTION: REGISTRAR PAGO -->
+      <section id="sec-registrar-pago" class="hidden space-y-4">
+        <h2 class="text-xl font-bold text-slate-900">Registrar Pago / Abono de Cliente</h2>
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-slate-200 max-w-2xl">
+          <form onsubmit="guardarPago(event)" class="space-y-4">
+            <div>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Seleccionar Factura Pendiente</label>
+              <select id="select-factura-pago" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium">
+                <option value="">Cargando facturas abiertas...</option>
+              </select>
+            </div>
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Fecha de Depósito / Pago</label>
+                <input type="date" id="input-fecha-pago" required class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm">
+              </div>
+              <div>
+                <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Monto Abonado</label>
+                <input type="number" step="0.01" id="input-monto-pago" required placeholder="0.00" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-bold text-emerald-600">
+              </div>
+            </div>
+            <div>
+              <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Referencia / N° Operación</label>
+              <input type="text" id="input-ref-pago" placeholder="Ej. Transferencia SPEI #98234" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm">
+            </div>
+            <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg text-sm shadow transition">
+              💵 Aplicar Pago & Actualizar Saldo
+            </button>
+          </form>
+        </div>
+      </section>
+
+      <!-- SECTION: ESTADOS DE CUENTA POR CLIENTE -->
+      <section id="sec-estados" class="hidden space-y-4">
+        <h2 class="text-xl font-bold text-slate-900">Estado de Cuenta por Cliente</h2>
+        <div class="bg-white p-4 rounded-xl shadow-sm border border-slate-200">
+          <label class="block text-xs font-bold text-slate-600 uppercase mb-1">Seleccionar Cliente</label>
+          <select id="select-cliente-estado" onchange="verEstadoCuenta()" class="w-full bg-slate-50 border border-slate-300 rounded-lg p-2.5 text-sm font-medium">
+            <option value="">-- Selecciona un cliente --</option>
+          </select>
+        </div>
+
+        <div id="detalle-estado-cuenta" class="hidden space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div class="bg-emerald-50 border border-emerald-200 p-4 rounded-xl">
+              <span class="text-xs font-bold text-emerald-700 uppercase">Saldo Pendiente MXN</span>
+              <p class="text-2xl font-black text-emerald-900 mt-1" id="estado-saldo-mxn">$0.00</p>
+            </div>
+            <div class="bg-indigo-50 border border-indigo-200 p-4 rounded-xl">
+              <span class="text-xs font-bold text-indigo-700 uppercase">Saldo Pendiente USD</span>
+              <p class="text-2xl font-black text-indigo-900 mt-1" id="estado-saldo-usd">$0.00</p>
+            </div>
+          </div>
+
+          <div class="table-shell">
+            <div class="p-4 bg-slate-50 border-b border-slate-200 font-bold text-sm">Facturas del Cliente</div>
+            <div class="overflow-x-auto">
+              <table class="w-full text-left text-sm">
+                <thead>
+                  <tr class="bg-slate-100/50 text-xs text-slate-500 uppercase border-b">
+                    <th class="p-3">Folio</th>
+                    <th class="p-3">Negocio</th>
+                    <th class="p-3">Fecha</th>
+                    <th class="p-3">Total</th>
+                    <th class="p-3">Abonado</th>
+                    <th class="p-3">Últimos pagos</th>
+                    <th class="p-3">Saldo</th>
+                    <th class="p-3">Días vencidos</th><th class="p-3">Estatus</th>
+                  </tr>
+                </thead>
+                <tbody id="tabla-estado-cliente" class="divide-y divide-slate-100">
+                  <tr><td colspan="9" class="p-6 text-center text-slate-400">Selecciona un cliente para consultar su cartera.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+    </main>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://dwklqjswdgoxqooblmeg.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR3a2xxanN3ZGdveHFvb2JsbWVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzOTE5MTIsImV4cCI6MjEwNzk2NzkxMn0.S_TaeU4YGwj4lL3pGzYaLgSmeIAGHQlWoz3wCH2HUqY'; // Reemplaza con tu clave anon completa
+
+    const client = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    let globalInvoices = [];
+    let globalBalances = [];
+    let globalCustomers = [];
+    let globalPayments = [];
+
+    function escapeHtml(value) {
+      return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      })[char]);
+    }
+
+    function showSection(name, button) {
+      document.querySelectorAll('main > section').forEach(el => el.classList.add('hidden'));
+      document.getElementById('sec-' + name).classList.remove('hidden');
+
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('bg-slate-900', 'text-white');
+        btn.classList.add('text-slate-600', 'hover:bg-slate-100');
+      });
+      const activeButton = button || document.querySelector(`.nav-btn[onclick*="showSection('${name}'"]`);
+      if (activeButton) {
+        activeButton.classList.add('bg-slate-900', 'text-white');
+        activeButton.classList.remove('text-slate-600', 'hover:bg-slate-100');
+      }
+    }
+
+    async function initDashboard() {
+      const badge = document.getElementById('status-badge');
+      try {
+        const [customersResult, invoicesResult, balancesResult, paymentsResult] = await Promise.all([
+          client.from('customers').select('*').order('legal_name'),
+          client.from('invoices').select('*, customers(legal_name)').order('invoice_date', { ascending: false }),
+          client.from('invoice_balances').select('*'),
+          client.from('payments').select('id, invoice_id, payment_date, amount, currency, reference').order('payment_date', { ascending: false })
+        ]);
+        for (const result of [customersResult, invoicesResult, balancesResult, paymentsResult]) {
+          if (result.error) throw result.error;
+        }
+        globalCustomers = customersResult.data || [];
+        globalInvoices = invoicesResult.data || [];
+        globalBalances = balancesResult.data || [];
+        globalPayments = paymentsResult.data || [];
+
+        badge.className = 'px-3 py-1 bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full text-xs font-semibold flex items-center gap-2';
+        badge.innerHTML = '<span class="w-2 h-2 rounded-full bg-emerald-400"></span> Conectado con Éxito';
+
+        renderKPIs();
+        renderFacturas();
+        populateSelects();
+
+        // Establecer fechas de hoy por defecto
+        document.getElementById('input-fecha-emision').valueAsDate = new Date();
+        document.getElementById('input-fecha-vencimiento').valueAsDate = new Date();
+        document.getElementById('input-fecha-pago').valueAsDate = new Date();
+
+      } catch (err) {
+        console.error('Error init:', err);
+        badge.className = 'px-3 py-1 bg-red-500/20 text-red-300 border border-red-500/30 rounded-full text-xs font-semibold';
+        badge.innerText = 'Error de conexión';
+      }
+    }
+
+
+    function money(value) { return Number(value || 0); }
+    function fmtMoney(value) { return money(value).toLocaleString('es-MX',{minimumFractionDigits:2,maximumFractionDigits:2}); }
+    function todayISO() { const d=new Date(); return new Date(d.getTime()-d.getTimezoneOffset()*60000).toISOString().slice(0,10); }
+    function cancelled(inv) { return String(inv.collection_status || inv.status || '').toLowerCase()==='cancelada'; }
+    function overdueDays(inv) {
+      if (!inv || !inv.due_date || money(inv.balance)<=0 || cancelled(inv)) return 0;
+      const due=new Date(String(inv.due_date).slice(0,10)+'T00:00:00');
+      const now=new Date(todayISO()+'T00:00:00');
+      return Number.isNaN(due.getTime()) ? 0 : Math.max(0,Math.floor((now-due)/86400000));
+    }
+    function dueInDays(inv) {
+      if (!inv || !inv.due_date || money(inv.balance)<=0 || cancelled(inv)) return null;
+      const due=new Date(String(inv.due_date).slice(0,10)+'T00:00:00');
+      const now=new Date(todayISO()+'T00:00:00');
+      return Number.isNaN(due.getTime()) ? null : Math.floor((due-now)/86400000);
+    }
+    const chartInstances={};
+    function drawChart(id, config) {
+      const el=document.getElementById(id); if(!el || !window.Chart) return;
+      if(chartInstances[id]) chartInstances[id].destroy();
+      chartInstances[id]=new Chart(el,config);
+    }
+    function renderCharts() {
+      if(!window.Chart) return;
+      const rows=globalBalances.filter(b=>!cancelled(b));
+      const overdue=rows.filter(b=>overdueDays(b)>0);
+      drawChart('chart-status',{type:'doughnut',data:{labels:['Pagadas','Vencidas','Pendientes vigentes'],datasets:[{data:[rows.filter(b=>money(b.balance)<=0).length,overdue.length,rows.filter(b=>money(b.balance)>0&&overdueDays(b)===0).length],backgroundColor:['#879a83','#c96c65','#c9ad7c'],borderWidth:0}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom'}}}});
+      const lines=['Carton','Foam','Otro'];
+      drawChart('chart-business',{type:'bar',data:{labels:lines.map(x=>x==='Carton'?'Cartón':x),datasets:[
+        {label:'MXN',data:lines.map(l=>rows.filter(b=>(b.business_line||'Carton')===l&&b.currency==='MXN').reduce((a,b)=>a+money(b.balance),0)),backgroundColor:'#879a83'},
+        {label:'USD',data:lines.map(l=>rows.filter(b=>(b.business_line||'Carton')===l&&b.currency==='USD').reduce((a,b)=>a+money(b.balance),0)),backgroundColor:'#9ba9b8'}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}},plugins:{legend:{position:'bottom'}}}});
+      const months=[]; const now=new Date();
+      for(let i=11;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);months.push({key:`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`,label:d.toLocaleDateString('es-MX',{month:'short',year:'2-digit'})});}
+      drawChart('chart-monthly',{type:'bar',data:{labels:months.map(m=>m.label),datasets:[
+        {label:'MXN',data:months.map(m=>globalInvoices.filter(i=>String(i.invoice_date||'').slice(0,7)===m.key&&i.currency==='MXN'&&!cancelled(i)).reduce((a,i)=>a+money(i.total),0)),backgroundColor:'#879a83'},
+        {label:'USD',data:months.map(m=>globalInvoices.filter(i=>String(i.invoice_date||'').slice(0,7)===m.key&&i.currency==='USD'&&!cancelled(i)).reduce((a,i)=>a+money(i.total),0)),backgroundColor:'#9ba9b8'}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}},plugins:{legend:{position:'bottom'}}}});
+      const ranges=[{label:'1–30 días',min:1,max:30},{label:'31–60 días',min:31,max:60},{label:'61–90 días',min:61,max:90},{label:'Más de 90',min:91,max:Infinity}];
+      drawChart('chart-aging',{type:'bar',data:{labels:ranges.map(r=>r.label),datasets:[
+        {label:'MXN',data:ranges.map(r=>overdue.filter(b=>b.currency==='MXN'&&overdueDays(b)>=r.min&&overdueDays(b)<=r.max).reduce((a,b)=>a+money(b.balance),0)),backgroundColor:'#c96c65'},
+        {label:'USD',data:ranges.map(r=>overdue.filter(b=>b.currency==='USD'&&overdueDays(b)>=r.min&&overdueDays(b)<=r.max).reduce((a,b)=>a+money(b.balance),0)),backgroundColor:'#9ba9b8'}]},options:{responsive:true,maintainAspectRatio:false,scales:{y:{beginAtZero:true}},plugins:{legend:{position:'bottom'}}}});
+    }
+    function renderKPIs() {
+      const active=globalBalances.filter(b=>!cancelled(b));
+      const totalMXN=active.filter(b=>b.currency==='MXN').reduce((a,b)=>a+money(b.total),0);
+      const totalUSD=active.filter(b=>b.currency==='USD').reduce((a,b)=>a+money(b.total),0);
+      const saldoMXN=active.filter(b=>b.currency==='MXN').reduce((a,b)=>a+money(b.balance),0);
+      const saldoUSD=active.filter(b=>b.currency==='USD').reduce((a,b)=>a+money(b.balance),0);
+      const late=active.filter(b=>overdueDays(b)>0);
+      const lateMXN=late.filter(b=>b.currency==='MXN').reduce((a,b)=>a+money(b.balance),0);
+      const lateUSD=late.filter(b=>b.currency==='USD').reduce((a,b)=>a+money(b.balance),0);
+      const soon=active.filter(b=>{const d=dueInDays(b);return money(b.balance)>0&&d!==null&&d>=0&&d<=7;});
+      const paidMXN=globalPayments.filter(p=>p.currency==='MXN').reduce((a,p)=>a+money(p.amount),0);
+      const paidUSD=globalPayments.filter(p=>p.currency==='USD').reduce((a,p)=>a+money(p.amount),0);
+      document.getElementById('kpi-total-facturado').innerText='$'+fmtMoney(totalMXN)+' MXN';
+      document.getElementById('kpi-count-facturas').innerText=`${active.length} facturas activas · $${fmtMoney(totalUSD)} USD facturados`;
+      document.getElementById('kpi-saldo-mxn').innerText='$'+fmtMoney(saldoMXN)+' MXN';
+      document.getElementById('kpi-saldo-usd').innerText='$'+fmtMoney(saldoUSD)+' USD';
+      document.getElementById('kpi-total-clientes').innerText=globalCustomers.filter(c=>c.active!==false).length;
+      document.getElementById('kpi-vencidas').innerText=late.length;
+      document.getElementById('kpi-vencidas-monto').innerText=`Saldo vencido: MXN $${fmtMoney(lateMXN)} · USD $${fmtMoney(lateUSD)}`;
+      document.getElementById('kpi-por-vencer').innerText=soon.length;
+      document.getElementById('kpi-pagos').innerText=globalPayments.length;
+      document.getElementById('kpi-pagos-monto').innerText=`MXN $${fmtMoney(paidMXN)} · USD $${fmtMoney(paidUSD)}`;
+      document.getElementById('kpi-recuperacion').innerText=totalMXN>0?`${Math.min(100,Math.round(paidMXN/totalMXN*100))}% MXN`:'—';
+      renderCharts();
+    }
+
+    function renderFacturas() {
+      const fBusiness = document.getElementById('filter-business').value;
+      const fCurrency = document.getElementById('filter-currency').value;
+      const search = (document.getElementById('filter-search')?.value || '').trim().toLocaleLowerCase('es-MX');
+
+      let filtered = globalBalances;
+
+      if (fBusiness !== 'ALL') filtered = filtered.filter(b => (b.business_line || 'Carton') === fBusiness);
+      if (fCurrency !== 'ALL') filtered = filtered.filter(b => b.currency === fCurrency);
+      if (search) filtered = filtered.filter(b => {
+        const customer = globalCustomers.find(c => c.id === b.customer_id);
+        return String(b.invoice_number || '').toLocaleLowerCase('es-MX').includes(search)
+          || String(customer?.legal_name || '').toLocaleLowerCase('es-MX').includes(search);
+      });
+
+      let html = '';
+      if (filtered.length > 0) {
+        filtered.forEach(inv => {
+          const cust = globalCustomers.find(c => c.id === inv.customer_id);
+          const clienteNombre = cust ? cust.legal_name : 'Sin Cliente';
+          const negocio = inv.business_line || 'Carton';
+          const badgeNegocio = negocio === 'Foam' ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800';
+
+          let statusBadge = '<span class="bg-amber-100 text-amber-800 text-xs px-2 py-1 rounded font-semibold">PENDIENTE</span>';
+          if (inv.collection_status === 'pagada' || money(inv.balance) <= 0) statusBadge = '<span class="bg-emerald-100 text-emerald-800 text-xs px-2 py-1 rounded font-semibold">PAGADA</span>';
+          if (inv.collection_status === 'vencida') statusBadge = '<span class="bg-red-100 text-red-800 text-xs px-2 py-1 rounded font-semibold">VENCIDA</span>';
+
+          const pagosFactura = globalPayments
+            .filter(p => p.invoice_id === (inv.invoice_id || inv.id))
+            .sort((a, b) => String(b.payment_date || '').localeCompare(String(a.payment_date || '')));
+          const totalPagado = money(inv.paid);
+          const fmt = value => Number(value || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          const detallePagos = pagosFactura.length
+            ? pagosFactura.slice(0, 3).map(p => `${escapeHtml(p.payment_date || 'Sin fecha')}: ${fmt(p.amount)} ${escapeHtml(p.currency || inv.currency || '')}`).join('<br>')
+              + (pagosFactura.length > 3 ? `<br><span class="text-slate-400">+${pagosFactura.length - 3} abono(s)</span>` : '')
+            : '<span class="text-slate-400">Sin abonos</span>';
+
+          html += `<tr class="hover:bg-slate-50 transition">
+            <td class="p-3.5 font-bold text-slate-900">${escapeHtml(inv.invoice_number || '')}</td>
+            <td class="p-3.5 font-medium">${escapeHtml(clienteNombre)}</td>
+            <td class="p-3.5"><span class="pill-neutral">${escapeHtml(negocio)}</span></td>
+            <td class="p-3.5 text-xs whitespace-nowrap"><div>Emisión: ${escapeHtml(inv.invoice_date || '—')}</div><div class="mt-1 ${overdueDays(inv)>0?'text-rose-700 font-bold':'text-slate-500'}">Vence: ${escapeHtml(inv.due_date || 'Sin fecha')}</div></td>
+            <td class="p-3.5 font-semibold whitespace-nowrap">$${fmt(inv.total)} ${escapeHtml(inv.currency || '')}</td>
+            <td class="p-3.5 payment-detail text-xs">
+              <div class="font-semibold text-slate-700">${pagosFactura.length ? `Abonado: $${fmt(totalPagado)} ${escapeHtml(inv.currency || '')}` : 'Sin pagos'}</div>
+              <div class="mt-1 text-slate-500">${detallePagos}</div>
+            </td>
+            <td class="p-3.5 font-bold whitespace-nowrap ${inv.balance > 0 ? 'text-amber-700' : 'text-emerald-700'}">$${fmt(inv.balance)} ${escapeHtml(inv.currency || '')}</td>
+            <td class="p-3.5">${overdueDays(inv)>0?`<span class="aging-badge aging-late">${overdueDays(inv)} días vencidos</span>`:money(inv.balance)<=0?'<span class="aging-badge aging-ok">Liquidada</span>':dueInDays(inv)!==null&&dueInDays(inv)<=7?`<span class="aging-badge aging-soon">${dueInDays(inv)===0?'Vence hoy':`Vence en ${dueInDays(inv)} días`}</span>`:'<span class="text-xs text-slate-400">Al corriente</span>'}</td>
+            <td class="p-3.5">${statusBadge}</td>
+          </tr>`;
+        });
+      } else {
+        html = '<tr><td colspan="9" class="p-6 text-center text-slate-400">No hay facturas con estos filtros.</td></tr>';
+      }
+
+      document.getElementById('tabla-facturas').innerHTML = html;
+    }
+
+    function populateSelects() {
+      // Poblar Clientes
+      let cHtml = '<option value="">-- Selecciona Cliente --</option>';
+      globalCustomers.forEach(c => {
+        cHtml += `<option value="${c.id}">${c.legal_name}</option>`;
+      });
+      document.getElementById('select-cliente-factura').innerHTML = cHtml;
+      document.getElementById('select-cliente-estado').innerHTML = cHtml;
+
+      // Poblar Facturas abiertas para pagos
+      let fHtml = '<option value="">-- Selecciona Factura con Saldo --</option>';
+      globalBalances.filter(b => b.balance > 0).forEach(b => {
+        const cust = globalCustomers.find(c => c.id === b.customer_id);
+        fHtml += `<option value="${b.invoice_id}">${b.invoice_number} - ${cust ? cust.legal_name : 'Cliente'} (Saldo: $${b.balance} ${b.currency})</option>`;
+      });
+      document.getElementById('select-factura-pago').innerHTML = fHtml;
+    }
+
+    async function guardarFactura(e) {
+      e.preventDefault();
+      const customer_id = document.getElementById('select-cliente-factura').value;
+      const invoice_number = document.getElementById('input-folio').value;
+      const business_line = document.getElementById('select-negocio').value;
+      const invoice_date = document.getElementById('input-fecha-emision').value;
+      const due_date = document.getElementById('input-fecha-vencimiento').value;
+      const currency = document.getElementById('select-moneda').value;
+      const total = parseFloat(document.getElementById('input-monto').value);
+      if (!Number.isFinite(total) || total <= 0) { alert('Captura un monto total mayor a cero.'); return; }
+      // El formulario no desglosa IVA: subtotal=total y tax=0 para cumplir NOT NULL.
+      const subtotal = total, tax = 0;
+      const { error } = await client.from('invoices').insert([{
+        customer_id, invoice_number, source: 'manual', business_line, invoice_date, due_date,
+        currency, subtotal, tax, total, status: 'abierta'
+      }]);
+
+      if (error) {
+        alert('Error al guardar factura: ' + error.message);
+      } else {
+        alert('¡Factura guardada con éxito!');
+        e.target.reset();
+        await initDashboard();
+        showSection('facturas');
+      }
+    }
+
+    async function guardarPago(e) {
+      e.preventDefault();
+      const invoice_id = document.getElementById('select-factura-pago').value;
+      const payment_date = document.getElementById('input-fecha-pago').value;
+      const amount = parseFloat(document.getElementById('input-monto-pago').value);
+      const reference = document.getElementById('input-ref-pago').value;
+
+      const inv = globalInvoices.find(i => i.id === invoice_id);
+      if (!inv) {
+        alert('No se encontró la factura seleccionada. Actualiza el panel e inténtalo de nuevo.');
+        return;
+      }
+      if (!Number.isFinite(amount) || amount <= 0) {
+        alert('Captura un monto de abono mayor a cero.');
+        return;
+      }
+
+      const { error } = await client.from('payments').insert([{
+        invoice_id, payment_date, amount, currency: inv.currency, reference
+      }]);
+
+      if (error) {
+        alert('Error al aplicar pago: ' + error.message);
+      } else {
+        alert('¡Pago aplicado correctamente!');
+        e.target.reset();
+        await initDashboard();
+        showSection('facturas');
+      }
+    }
+
+    function verEstadoCuenta() {
+      const cId = document.getElementById('select-cliente-estado').value;
+      const container = document.getElementById('detalle-estado-cuenta');
+
+      if (!cId) {
+        container.classList.add('hidden');
+        return;
+      }
+
+      container.classList.remove('hidden');
+
+      const clientBalances = globalBalances.filter(b => b.customer_id === cId);
+
+      let saldoMXN = 0;
+      let saldoUSD = 0;
+
+      let html = '';
+      clientBalances.forEach(inv => {
+        if (inv.currency === 'MXN') saldoMXN += parseFloat(inv.balance);
+        if (inv.currency === 'USD') saldoUSD += parseFloat(inv.balance);
+
+        const pagosFactura = globalPayments
+          .filter(p => p.invoice_id === (inv.invoice_id || inv.id))
+          .sort((a, b) => String(b.payment_date || '').localeCompare(String(a.payment_date || '')));
+        const totalPagado = money(inv.paid);
+        const fmtEstado = value => Number(value || 0).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const pagosRecientes = pagosFactura.length
+          ? pagosFactura.slice(0, 2).map(p => `${escapeHtml(p.payment_date || 'Sin fecha')}: $${fmtEstado(p.amount)} ${escapeHtml(p.currency || inv.currency || '')}`).join('<br>')
+          : '<span class="text-slate-400">Sin abonos</span>';
+        const estadoLabel = ({ pagada: 'Pagada', vencida: 'Vencida', pendiente: 'Pendiente', abierta: 'Pendiente', cancelada: 'Cancelada' })[String(inv.collection_status || '').toLowerCase()] || (inv.collection_status || 'Pendiente');
+        const estadoClass = String(inv.collection_status || '').toLowerCase() === 'pagada'
+          ? 'bg-emerald-50 text-emerald-700'
+          : String(inv.collection_status || '').toLowerCase() === 'vencida'
+            ? 'bg-rose-50 text-rose-700'
+            : 'bg-amber-50 text-amber-700';
+
+        html += `<tr class="border-b hover:bg-slate-50">
+          <td class="p-3 font-bold">${escapeHtml(inv.invoice_number || '')}</td>
+          <td class="p-3 text-xs"><span class="pill-neutral">${escapeHtml(inv.business_line || 'Carton')}</span></td>
+          <td class="p-3 text-xs whitespace-nowrap"><div>Emisión: ${escapeHtml(inv.invoice_date || '—')}</div><div class="mt-1 ${overdueDays(inv)>0?'text-rose-700 font-bold':'text-slate-500'}">Vence: ${escapeHtml(inv.due_date || 'Sin fecha')}</div></td>
+          <td class="p-3 whitespace-nowrap font-medium">$${fmtEstado(inv.total)} ${escapeHtml(inv.currency || '')}</td>
+          <td class="p-3 whitespace-nowrap font-semibold text-slate-700">$${fmtEstado(totalPagado)} ${escapeHtml(inv.currency || '')}</td>
+          <td class="p-3 text-xs payment-detail">${pagosRecientes}</td>
+          <td class="p-3 whitespace-nowrap font-bold ${inv.balance > 0 ? 'text-amber-700' : 'text-emerald-700'}">$${fmtEstado(inv.balance)} ${escapeHtml(inv.currency || '')}</td>
+          <td class="p-3">${overdueDays(inv)>0?`<span class="aging-badge aging-late">${overdueDays(inv)} días vencidos</span>`:money(inv.balance)<=0?'<span class="aging-badge aging-ok">Liquidada</span>':dueInDays(inv)!==null&&dueInDays(inv)<=7?`<span class="aging-badge aging-soon">${dueInDays(inv)===0?'Vence hoy':`Vence en ${dueInDays(inv)} días`}</span>`:'<span class="text-xs text-slate-400">Al corriente</span>'}</td>
+          <td class="p-3 text-xs"><span class="inline-flex rounded-full px-2.5 py-1 font-bold ${estadoClass}">${escapeHtml(estadoLabel)}</span></td>
+        </tr>`;
+      });
+
+      document.getElementById('estado-saldo-mxn').innerText = '$' + saldoMXN.toLocaleString('es-MX', {minimumFractionDigits: 2}) + ' MXN';
+      document.getElementById('estado-saldo-usd').innerText = '$' + saldoUSD.toLocaleString('es-MX', {minimumFractionDigits: 2}) + ' USD';
+      document.getElementById('tabla-estado-cliente').innerHTML = html || '<tr><td colspan="9" class="p-6 text-center text-slate-400">Este cliente no tiene facturas registradas.</td></tr>';
+    }
+
+    document.addEventListener('DOMContentLoaded', initDashboard);
+  </script>
+</body>
+</html>
