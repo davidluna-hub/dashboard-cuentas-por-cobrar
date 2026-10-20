@@ -21,8 +21,8 @@
 <footer class="footnote">AMAO Polymer & Plastics Industries · Los datos se consultan directamente desde Supabase. Revisa las políticas RLS antes de publicar y valida cualquier decisión de crédito con tu política interna.</footer></div></main></div>
 <script>
 // CONFIGURACIÓN: reemplaza estos valores por Project URL y anon/public key de Supabase.
-const SUPABASE_URL='https://TU-PROYECTO.supabase.co';
-const SUPABASE_ANON_KEY='PEGA_AQUI_TU_ANON_PUBLIC_KEY';
+const SUPABASE_URL='https://dwklqjswdgoxqooblmeg.supabase.co';
+const SUPABASE_ANON_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImR3a2xxanN3ZGdveHFvb2JsbWVnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTIzOTE5MTIsImV4cCI6MjEwNzk2NzkxMn0.S_TaeU4YGwj4lL3pGzYaLgSmeIAGHQlWoz3wCH2HUqY';
 const configured=SUPABASE_URL.startsWith('https://')&&!SUPABASE_URL.includes('TU-PROYECTO')&&SUPABASE_ANON_KEY&&!SUPABASE_ANON_KEY.includes('PEGA_AQUI');
 const $=id=>document.getElementById(id);let sb=null,customers=[],invoices=[],payments=[],charts={},activeTab='overview';
 const today=()=>new Date().toISOString().slice(0,10);const money=(n,c='USD')=>new Intl.NumberFormat('es-MX',{style:'currency',currency:c,maximumFractionDigits:2}).format(Number(n)||0);const fmt=n=>money(n,$('currency').value);const date=s=>s?new Date(s.slice(0,10)+'T12:00:00').toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'}):'—';const daysLate=d=>Math.max(0,Math.floor((new Date(today()+'T00:00:00')-new Date((d||today())+'T00:00:00'))/86400000));const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const sum=(a,k)=>a.reduce((s,x)=>s+Number(x[k]||0),0);const showMsg=(msg,type='success',target='globalMsg')=>{$(target).innerHTML=msg?`<div class="notice ${type}">${esc(msg)}</div>`:''};
