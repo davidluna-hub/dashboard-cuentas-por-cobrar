@@ -1,5 +1,6 @@
 function opsCompany(){return operationsState.payload.company||{};}
 function renderOpsSettings(){
+ if(activeTab!=='operations'||operationsTab!=='settings')return;
  const c=opsCompany(),field=(label,name,value,type='text')=>'<label>'+esc(label)+'<input class="field" name="'+name+'" type="'+type+'" value="'+esc(value||'')+'" maxlength="240"></label>';
  let html='<h2>Empresa y perfil</h2><p class="sub">La configuración de empresa se aplica a estados de cuenta y a los futuros avisos automáticos.</p>';
  if(opsAdmin()){
@@ -16,7 +17,7 @@ async function saveOpsCompany(e){
  await saveOperations(next);opsConfigureMail();showMsg('Información de empresa confirmada en Supabase.');renderOpsSettings();
 }
 async function loadOpsUsers(){
- if(!opsAdmin())return;const {data,error}=await sb.from('profiles').select('id,full_name,email,role').order('created_at');if(error)throw error;
+ if(!opsAdmin())return;const user=activeUserId;const {data,error}=await opsRead(sb.from('profiles').select('id,full_name,email,role').order('created_at'));if(user!==activeUserId)return;if(error)throw error;if(activeTab!=='operations'||operationsTab!=='settings')return;
  $('opsUsers').innerHTML=table(data.map(u=>'<tr><td>'+esc(u.full_name||u.email||u.id)+'</td><td>'+esc(u.email||'')+'</td><td><select class="field ops-user-role" data-ops-role="'+esc(u.id)+'"'+(u.id===activeUserId?' disabled':'')+'>'+['admin','facturacion','cobranza','solo_consulta'].map(r=>'<option'+(r===u.role?' selected':'')+'>'+r+'</option>').join('')+'</select></td><td>'+opsAction('Guardar permiso','user-role',u.id,u.id===activeUserId)+'</td></tr>'),['Usuario','Correo','Perfil','Acción']);
 }
 async function saveOpsRole(id){if(!opsAdmin()||id===activeUserId)return;const el=document.querySelector('[data-ops-role="'+CSS.escape(id)+'"]');if(!el)return;const {data,error}=await sb.from('profiles').update({role:el.value}).eq('id',id).select('id,role').single();if(error)throw error;if(!data)throw Error('No se confirmó el permiso.');showMsg('Permiso de usuario actualizado. Se aplicará en su próxima actualización de cartera.');}
@@ -24,5 +25,5 @@ function openOpsCreditReview(id){
  if(!opsAdmin())return;const r=operationsState.payload.creditReviews[id]||{};modal('Revisión de crédito · '+customerName(id),'<form id="opsCreditReviewForm" data-customer="'+esc(id)+'"><div class="form-grid"><label>Próxima revisión<input class="field" name="date" type="date" required value="'+esc(r.date||today())+'"></label><label>Prioridad<select name="priority" class="field">'+['Normal','Alta','Baja'].map(p=>'<option'+(r.priority===p?' selected':'')+'>'+p+'</option>').join('')+'</select></label></div><label>Observaciones<textarea class="field" name="notes" maxlength="2000">'+esc(r.notes||'')+'</textarea></label><p class="meta">Programar una revisión no bloquea la captura de facturas ni cambia el crédito autorizado.</p><button type="submit" class="green-btn">Guardar revisión</button></form>');
 }
 async function saveOpsCreditReview(e){
- e.preventDefault();if(!opsAdmin())return;const f=e.target.elements,next=opsClone(operationsState.payload);next.creditReviews[e.target.dataset.customer]={date:f.date.value,priority:f.priority.value,notes:f.notes.value.trim(),updated_at:new Date().toISOString()};await saveOperations(next);$('detailModal').classList.remove('open');renderAll();showMsg('Revisión de crédito programada.');
+ e.preventDefault();if(!opsAdmin())return;const f=e.target.elements,next=opsClone(operationsState.payload);next.creditReviews[e.target.dataset.customer]={date:f.date.value,priority:f.priority.value,notes:f.notes.value.trim(),updated_at:new Date().toISOString()};await saveOperations(next);if($('opsCreditReviewForm')===e.target)$('detailModal').classList.remove('open');renderAll();showMsg('Revisión de crédito programada.');
 }

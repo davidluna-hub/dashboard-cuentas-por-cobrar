@@ -52,3 +52,5 @@ Las migraciones ya aplicadas se conservan en `supabase/migrations/`. `supabase/v
 Después de `npm run build`, desplegar `supabase/functions/amao-reminders` y `supabase/functions/amao-portfolio-history` mediante el flujo de Supabase, conservando la autenticación de sus cuerpos. Nunca incluir claves de servicio, del proveedor ni secretos del programador en el repositorio. El cliente usa una clave pública y una sesión autenticada.
 
 GitHub Pages sirve `index.html` desde `main`. Verificar la publicación comparando su SHA-256 con el archivo generado. El estado de la base y los envíos se verifica por separado.
+
+La prueba `operations/check-dom.cjs` carga el HTML completo con jsdom y usa sus controles reales: navegación, filtros de reportes, XLSX/PNG/copia, historial con reintentos, formularios, virtuales y comprobantes. Verifica los estados visibles, la recuperación tras errores y los permisos de consulta. Las escrituras de red y cuenta son simuladas; la animación y el diseño deben revisarse también en un navegador.

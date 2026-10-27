@@ -12,7 +12,8 @@
   },
   "devDependencies": {
     "@napi-rs/canvas": "0.1.100",
-    "pdf-lib": "1.17.1",
-    "chart.js": "4.4.4"
+    "chart.js": "4.4.4",
+    "jsdom": "26.1.0",
+    "pdf-lib": "1.17.1"
   }
 }

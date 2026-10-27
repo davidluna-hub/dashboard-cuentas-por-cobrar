@@ -59,8 +59,15 @@ renderFilteredInvoiceTable=function(rows){
 };
 window.addEventListener?.('beforeunload',e=>{if(localStorage.getItem(localFeatureKey()+'_cloud_pending')){e.preventDefault();e.returnValue='';}});
 const opsResetBeforeOperations=resetCollectionTools;
-resetCollectionTools=function(){opsResetBeforeOperations();operationsState={user:null,ready:false,version:0,payload:{company:{},creditReviews:{},virtuals:[],attachments:[]},error:''};opsBasePayload=null;opsConflict=null;opsAuditRows=[];opsReportModel=null;opsPendingMessage='';opsDocumentCustomer='';opsDocumentRecord='';opsVirtualCustomer='';for(const id of ['opsPanel','opsExecutive','opsHealth'])if($(id))$(id).innerHTML='';};
+resetCollectionTools=function(){opsResetBeforeOperations();operationsState={user:null,ready:false,version:0,payload:{company:{},creditReviews:{},virtuals:[],attachments:[]},error:''};opsBasePayload=null;opsConflict=null;opsAuditRows=[];opsAuditRequest++;opsAuditLoading=false;opsAuditError='';opsPendingActions.clear();opsReportModel=null;opsPendingMessage='';opsDocumentCustomer='';opsDocumentRecord='';opsVirtualCustomer='';for(const id of ['opsPanel','opsExecutive','opsHealth'])if($(id))$(id).innerHTML='';};
 
 executiveRisk=function(){const byId=new Map(customerRollup().map(c=>[c.id,c]));return buildHoldReview().filter(r=>r.included&&r.accounts.some(a=>a.currency===selectedCurrency()&&a.debt>0)).map(r=>({...byId.get(r.customer.id),reasons:holdReviewReasons(r)}));};
 
 function opsConfigureMail(){const c=operationsState.payload?.company||{};ArBillingCore.mailDefaults.sender=c.email||'';ArBillingCore.mailDefaults.cc=c.copy_email||'';const form=$('reminderProviderForm');if(form?.elements){form.elements.sender.value=c.email||'';form.elements.replyTo.value=c.email||'';if(form.elements.copyEmail)form.elements.copyEmail.value=c.copy_email||'';}}
+
+const opsLoadBeforeSharedReload=loadData;let opsDataLoadPending=null;
+loadData=function(){
+ if(opsDataLoadPending)return opsDataLoadPending;
+ const request=Promise.resolve().then(()=>opsLoadBeforeSharedReload());opsDataLoadPending=request;
+ return request.finally(()=>{if(opsDataLoadPending===request)opsDataLoadPending=null;});
+};

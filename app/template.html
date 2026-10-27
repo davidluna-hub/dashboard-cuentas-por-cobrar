@@ -357,7 +357,8 @@ function promiseRow(p,actions=true){return `<tr><td><b>${date(p.scheduled_date)}
 const promiseHeaders=['Fecha acordada','Cliente','Referencia / tipo','Importe prometido','Recibido','Pendiente','Estado','Acciones'];
 function sortedPromises(rows){const priority=p=>p.state==='overdue'?0:p.state==='today'?1:p.state==='fulfilled'?3:p.state==='cancelled'?4:2;return [...rows].sort((a,b)=>priority(a)-priority(b)||a.scheduled_date.localeCompare(b.scheduled_date)||customerName(a.customer_id).localeCompare(customerName(b.customer_id)));}
 
-function go(tab){resetQuickSearchCache();activeTab=tab;document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));$('view-'+tab)?.classList.remove('hidden');document.querySelectorAll('.nav').forEach(v=>v.classList.toggle('active',v.dataset.tab===tab));$('crumb').textContent=({overview:'Resumen ejecutivo',analysis:'Análisis de cartera',invoices:'Facturas',payments:'Pagos y abonos',statements:'Estados de cuenta',customers:'Clientes y crédito',promises:'Promesas de pago'})[tab]||tab;if(['overview','analysis'].includes(tab))renderCharts();}
+let chartNavigationEntry=false;
+function go(tab){const changed=activeTab!==tab;resetQuickSearchCache();activeTab=tab;document.querySelectorAll('.view').forEach(v=>v.classList.add('hidden'));$('view-'+tab)?.classList.remove('hidden');document.querySelectorAll('.nav').forEach(v=>v.classList.toggle('active',v.dataset.tab===tab));$('crumb').textContent=({overview:'Resumen ejecutivo',analysis:'Análisis de cartera',invoices:'Facturas',payments:'Pagos y abonos',statements:'Estados de cuenta',customers:'Clientes y crédito',promises:'Promesas de pago'})[tab]||tab;const view=$('view-'+tab);if(changed&&view){view.classList.remove('view-enter');void view.offsetWidth;view.classList.add('view-enter');}if(['overview','analysis'].includes(tab)){chartNavigationEntry=changed;try{renderCharts();}finally{chartNavigationEntry=false;}}}
 function fillSelect(id,options,placeholder,defaultValue=''){const el=$(id);if(!el)return;const old=el.value;el.innerHTML=(placeholder!==null?`<option value="${defaultValue}">${placeholder}</option>`:'')+options.map(o=>`<option value="${esc(o.id)}">${esc(o.label)}</option>`).join('');if([...el.options].some(o=>o.value===old))el.value=old;}
 function fillSelects(){const opts=customers.map(c=>({id:c.id,label:c.legal_name+(c.customer_code?' · '+c.customer_code:'')}));fillSelect('invCustomer',opts,'Selecciona cliente…');fillSelect('payCustomer',opts,'Selecciona cliente…');fillSelect('pendingCustomer',opts,'Selecciona cliente…');fillSelect('statementCustomer',opts,'Todos los clientes','all');fillSelect('creditCustomerSelect',opts,'Selecciona cliente…');fillSelect('promiseCustomer',opts,'Selecciona cliente…');fillSelect('promiseCustomerFilter',opts,'Todos los clientes','all');fillPromiseInvoices();}
 function selectedAnalysisRows(){const f=$('analysisBusinessFilter').value;return currRows().filter(i=>f==='all'||businessName(i)===f);}
@@ -474,9 +475,10 @@ async function loadData(){
 
 function draw(id,type,data,extra={}){
  const el=$(id);if(!el||!window.Chart)return;
- const options={responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{position:type==='doughnut'?'bottom':'top',labels:{usePointStyle:true,boxWidth:8,padding:16,font:{size:10}}}},scales:type==='doughnut'?{}:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{callback:v=>new Intl.NumberFormat('es-MX',{notation:'compact',maximumFractionDigits:1}).format(v)}}},...extra};
+ const animate=chartNavigationEntry&&!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+ const options={responsive:true,maintainAspectRatio:false,animation:animate?{duration:320,easing:'easeOutQuart'}:false,plugins:{legend:{position:type==='doughnut'?'bottom':'top',labels:{usePointStyle:true,boxWidth:8,padding:16,font:{size:10}}}},scales:type==='doughnut'?{}:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{callback:v=>new Intl.NumberFormat('es-MX',{notation:'compact',maximumFractionDigits:1}).format(v)}}},...extra};
  const chart=charts[id];
- if(chart&&chart.config?.type===type&&typeof chart.update==='function'){chart.data=data;chart.options=options;chart.update('none');return;}
+ if(chart&&chart.config?.type===type&&typeof chart.update==='function'){chart.stop();if(animate)chart.resize();chart.data=data;chart.options=options;chart.update('none');if(animate){chart.reset();chart.update();}return;}
  chart?.destroy();charts[id]=new window.Chart(el,{type,data,options});
 }
 
