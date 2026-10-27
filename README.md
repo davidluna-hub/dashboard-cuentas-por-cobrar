@@ -33,7 +33,7 @@ npm test
 
 Los módulos de reglas son `automatic-emails/core.js`, `collection-tools/core.js`, `weekly-reports-core.js` y `operations/core.js`. La conciliación de promesas tiene una implementación compartida.
 
-Las pruebas usan datos sintéticos. Los flujos de interfaz, correos y cortes usan red simulada; el PDF y las tablas PNG se generan con bibliotecas reales. El Excel se genera con números tipados y texto literal, sin interpretar fórmulas de campos de usuario.
+Las pruebas usan datos sintéticos. Los flujos de interfaz, correos y cortes usan red simulada; el PDF y las tablas PNG se generan con bibliotecas reales. La navegación se prueba con 33 clientes, 800 facturas y 592 aplicaciones, incluidos clics repetidos y actualización de gráficas con Chart.js 4.4.4 real. El Excel se genera con números tipados y texto literal, sin interpretar fórmulas de campos de usuario.
 
 La última revisión se validó con pruebas de código y configuración; no se completó un recorrido visual interactivo en un navegador real.
 

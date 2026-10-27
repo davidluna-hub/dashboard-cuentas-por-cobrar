@@ -303,12 +303,14 @@ function syncAppliedPayments(){const localIds=new Set(localPayments.map(p=>p.id)
 function saveLocalFeatureData(){resetQuickSearchCache();localStorage.setItem(localFeatureKey(),JSON.stringify({receipts,creditSettings,plans,promises,localPayments,archivedMovements,creditNotes,invoiceCancellations,holdPreferences,reminderSettings,reminderCustomers}));syncAppliedPayments();queueReminderCloudSave();}
 function applyLocalAllocations(receipt,allocations,credit=false){let left=cents(receipt.amount);for(const a of allocations){const inv=invoices.find(i=>i.id===a.invoice_id);if(!inv)continue;let need=cents(a.amount);if(credit){for(const old of receipts.filter(x=>x.customer_id===receipt.customer_id&&x.currency===receipt.currency&&receiptRemaining(x)>0).sort((x,y)=>x.payment_date.localeCompare(y.payment_date))){const take=Math.min(need,cents(receiptRemaining(old)));if(!take)continue;localPayments.push({id:uuid(),invoice_id:inv.id,receipt_id:old.id,credit_batch_id:old.id,amount:amount(take),currency:receipt.currency,payment_date:receipt.payment_date,payment_method:'Saldo a favor',ar_recorded_at:new Date().toISOString()});need-=take;if(!need)break;}}else{localPayments.push({id:uuid(),invoice_id:inv.id,receipt_id:receipt.id,amount:amount(need),currency:receipt.currency,payment_date:receipt.payment_date,payment_method:receipt.payment_method,reference:receipt.reference,ar_recorded_at:new Date().toISOString()});left-=need;}}}
 
-const today=()=>ArBillingCore.localDay();
+const businessDayFormatter=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Ciudad_Juarez',year:'numeric',month:'2-digit',day:'2-digit'});
+const today=()=>businessDayFormatter.format(new Date());
 function localDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function date(s){if(!s)return '—';const d=new Date(String(s).slice(0,10)+'T12:00:00');return Number.isNaN(d.getTime())?'—':d.toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'});}
 const cents=n=>Math.round((Number(n)||0)*100);
 const amount=n=>n/100;
-const money=(n,c='USD')=>new Intl.NumberFormat('es-MX',{style:'currency',currency:c,maximumFractionDigits:2}).format(Number(n)||0);
+const moneyFormatters=new Map();
+const money=(n,c='USD')=>{if(!moneyFormatters.has(c))moneyFormatters.set(c,new Intl.NumberFormat('es-MX',{style:'currency',currency:c,maximumFractionDigits:2}));return moneyFormatters.get(c).format(Number(n)||0);};
 const fmt=n=>money(n,$('currency').value);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const sum=(rows,key)=>amount(rows.reduce((n,r)=>n+cents(r[key]),0));
@@ -470,7 +472,14 @@ async function loadData(){
   }
 }function renderAll(){resetQuickSearchCache();fillSelects();const rows=currRows(),open=rows.filter(i=>i.balance>0),overdue=open.filter(i=>i.late>0),analysis=selectedAnalysisRows(),aOpen=analysis.filter(i=>i.balance>0);const cash=receipts.filter(r=>r.currency===selectedCurrency()),legacy=payments.filter(p=>p.currency===selectedCurrency()&&!p.receipt_id);$('overviewMetrics').innerHTML=metric('Saldo pendiente',fmt(sum(open,'balance')),`${open.length} facturas con saldo`,'＄')+metric('Cartera vencida',fmt(sum(overdue,'balance')),`${overdue.length} facturas vencidas`,'◷','red')+metric('Cobros recibidos',fmt(amount(cash.reduce((s,r)=>s+cents(r.amount),0)+legacy.reduce((s,p)=>s+cents(p.amount),0))),'Efectivo recibido, incluidos anticipos','↙','green')+metric('Clientes con saldo',new Set(open.map(i=>i.customer_id)).size,'Adeudo total de Cartón y Foam','♙');$('analysisMetrics').innerHTML=metric('Adeudo del negocio',fmt(sum(aOpen,'balance')),`${aOpen.length} facturas abiertas`,'▤')+metric('Saldo vencido',fmt(sum(aOpen.filter(i=>i.late),'balance')),'Según filtro de negocio','◷','red')+metric('Al corriente',fmt(sum(aOpen.filter(i=>!i.late),'balance')),'Facturas sin vencimiento','✓','green')+metric('Más de 60 días',fmt(sum(aOpen.filter(i=>i.late>60),'balance')),'Requiere seguimiento','⚑','amber');renderBusinessDebt(analysis);renderCreditHold(analysis);$('priorityTable').innerHTML=table([...overdue].sort((a,b)=>b.late-a.late).slice(0,8).map(i=>`<tr><td><b>${esc(i.customer?.legal_name)}</b></td><td>${esc(i.invoice_number)}</td><td>${i.late} días</td><td><b>${fmt(i.balance)}</b></td><td><button class="pill" data-new-promise="${esc(i.id)}">Agendar promesa</button></td></tr>`),['Cliente','Factura','Días vencidos','Saldo','Seguimiento']);renderFilteredInvoiceTable(rows);const sc=$('statementCustomer').value,ss=$('statementSearch').value.toLowerCase(),stmt=rows.filter(i=>(sc==='all'||i.customer_id===sc)&&`${i.invoice_number} ${i.customer?.legal_name||''}`.toLowerCase().includes(ss));const a=sc==='all'?null:accountSummary(sc,selectedCurrency()),credits=a?a.credit:sum(customerRollup(),'credit');$('statementMetrics').innerHTML=metric('Facturado',fmt(sum(stmt,'total')),`${stmt.length} facturas en filtro`,'▤')+metric('Pagos aplicados',fmt(sum(stmt,'paid')),'Incluye aplicaciones de anticipos','↙','green')+metric('Facturas pendientes',fmt(sum(stmt,'balance')),'Saldo por factura','＄')+metric('Saldo a favor',fmt(credits),'Disponible del cliente, sin filtrar folios','↙','green');$('statementAccountSummary').innerHTML=a?`<div class="account-banner"><div><b>${esc(customerName(sc))}</b><div class="meta">Posición neta: ${a.net<0?'a favor del cliente':'por cobrar'} <b>${fmt(Math.abs(a.net))}</b></div><div class="meta">Plazo ${termsFor(sc).credit_days} días · ${a.limit===null?'Límite sin asignar':'Límite '+fmt(a.limit)+' · Disponible '+fmt(a.available)}</div></div><button class="green-btn" data-client-statement="${esc(sc)}">Abrir estado de cuenta completo</button></div>`:'';$('statementTable').innerHTML=opsStatementTableHTML(stmt);renderCustomerCards();renderCashHistory();renderPromises();renderOverviewExtras();renderPaymentAllocations();updateInvoiceCredit();renderCharts();document.querySelectorAll('.curLabel').forEach(el=>el.textContent=selectedCurrency());document.querySelectorAll('[data-feature]').forEach(el=>el.disabled=!featuresReady);updateInvoiceCredit();updatePaymentSummary();updatePromisePreview();}
 
-function draw(id,type,data,extra={}){const el=$(id);if(!el||!window.Chart)return;charts[id]?.destroy();charts[id]=new Chart(el,{type,data,options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:type==='doughnut'?'bottom':'top',labels:{usePointStyle:true,boxWidth:8,padding:16,font:{size:10}}}},scales:type==='doughnut'?{}:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{callback:v=>new Intl.NumberFormat('es-MX',{notation:'compact',maximumFractionDigits:1}).format(v)}}},...extra}});}
+function draw(id,type,data,extra={}){
+ const el=$(id);if(!el||!window.Chart)return;
+ const options={responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{position:type==='doughnut'?'bottom':'top',labels:{usePointStyle:true,boxWidth:8,padding:16,font:{size:10}}}},scales:type==='doughnut'?{}:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{callback:v=>new Intl.NumberFormat('es-MX',{notation:'compact',maximumFractionDigits:1}).format(v)}}},...extra};
+ const chart=charts[id];
+ if(chart&&chart.config?.type===type&&typeof chart.update==='function'){chart.data=data;chart.options=options;chart.update('none');return;}
+ chart?.destroy();charts[id]=new window.Chart(el,{type,data,options});
+}
+
 function renderChartsOriginal(){
   if(!['overview','analysis'].includes(activeTab))return;
   const cur=selectedCurrency();
@@ -478,6 +487,7 @@ function renderChartsOriginal(){
   const allOpen=rows.filter(i=>i.balance>0);
   const analysis=selectedAnalysisRows();
   const open=analysis.filter(i=>i.balance>0);
+  if(activeTab==='overview'){
   const labels=[],billed=[],collected=[];
   for(let k=5;k>=0;k--){
     const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-k);
@@ -494,10 +504,10 @@ function renderChartsOriginal(){
   const businessColors={'Cartón':'#07864f','Foam':'#77c49a','Otro':'#b9d4c3'};
   $('overviewBusinessCaption').textContent='Saldo pendiente: '+fmt(sum(allOpen,'balance'))+' · valores según el negocio registrado en cada factura.';
   draw('businessDebtChart','bar',{labels:businessLabels,datasets:[{label:'Adeudo pendiente',data:businessLabels.map(x=>amount(businessTotals[x])),backgroundColor:businessLabels.map(x=>businessColors[x]),borderRadius:7,barThickness:25}]},{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:function(context){return ' '+money(context.parsed.x,cur);}}}},scales:{x:{beginAtZero:true,grid:{color:'#edf1ee'},ticks:{callback:function(v){return new Intl.NumberFormat('es-MX',{notation:'compact',maximumFractionDigits:1}).format(v);}}},y:{grid:{display:false}}}});
+  }
+  if(activeTab!=='analysis')return;
   const ageLabels=['Al corriente','1–30 días','31–60 días','Más de 60'];
   const ageColors=['#07864f','#77c49a','#edbc5a','#cc5960'];
-  const agingAll=[sum(allOpen.filter(i=>!i.late),'balance'),sum(allOpen.filter(i=>i.late>0&&i.late<=30),'balance'),sum(allOpen.filter(i=>i.late>30&&i.late<=60),'balance'),sum(allOpen.filter(i=>i.late>60),'balance')];
-  draw('agingChart','doughnut',{labels:ageLabels,datasets:[{data:agingAll,backgroundColor:ageColors,borderWidth:0,hoverOffset:5}]},{cutout:'68%'});
   const agingAnalysis=[sum(open.filter(i=>!i.late),'balance'),sum(open.filter(i=>i.late>0&&i.late<=30),'balance'),sum(open.filter(i=>i.late>30&&i.late<=60),'balance'),sum(open.filter(i=>i.late>60),'balance')];
   draw('agingBars','bar',{labels:ageLabels,datasets:[{label:'Saldo abierto',data:agingAnalysis,backgroundColor:ageColors,borderRadius:6}]},{plugins:{legend:{display:false}}});
   draw('complianceChart','doughnut',{labels:['Liquidadas','Con saldo'],datasets:[{data:[analysis.filter(i=>i.balance===0).length,open.length],backgroundColor:['#07864f','#e7ece8'],borderWidth:0}]},{cutout:'70%'});
@@ -632,7 +642,7 @@ function renderOverviewExtras(){
 }
 function renderCharts(){
  renderChartsOriginal();
- if(!['overview','analysis'].includes(activeTab))return;
+ if(activeTab!=='overview')return;
  const details=promiseDetails().filter(p=>p.currency===selectedCurrency()&&p.state!=='cancelled'&&p.scheduled_date<=today());
  const onTime=details.filter(p=>p.state==='fulfilled'&&p.completed_date&&p.completed_date<=p.scheduled_date).length;
  const late=details.filter(p=>p.state==='fulfilled'&&p.completed_date>p.scheduled_date).length;

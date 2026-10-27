@@ -45,10 +45,11 @@ const opsOriginalEnriched=enriched;
 enriched=function(){if(opsCache?.rows)return opsCache.rows;const rows=opsOriginalEnriched();if(opsCache)opsCache.rows=rows;return rows;};
 const opsOriginalSummary=accountSummary;
 accountSummary=function(id,currency){const key=id+'|'+currency;if(opsCache?.accounts.has(key))return opsCache.accounts.get(key);const a=opsOriginalSummary(id,currency);opsCache?.accounts.set(key,a);return a;};
+function opsWithCalculationCache(work){if(opsCache)return work();opsCache={rows:null,accounts:new Map()};try{return work();}finally{opsCache=null;}}
 const opsOriginalRender=renderAll;
-renderAll=function(){opsCache={rows:null,accounts:new Map()};try{const result=opsOriginalRender();renderOperations();return result;}finally{opsCache=null;}};
+renderAll=function(){return opsWithCalculationCache(()=>{const result=opsOriginalRender();renderOpsHealth();renderOpsExecutive();renderOperations();return result;});};
 const opsOriginalGo=go;
-go=function(tab){opsOriginalGo(tab);if(tab==='operations'){$('crumb').textContent='Herramientas de cobranza';renderOperations();}};
+go=function(tab){return opsWithCalculationCache(()=>{opsOriginalGo(tab);if(tab==='operations'){$('crumb').textContent='Herramientas de cobranza';renderOperations();}});};
 const opsOriginalBehavior=customerBehaviorSummary;
 customerBehaviorSummary=function(id){const html=opsOriginalBehavior(id),r=operationsState.payload?.creditReviews?.[id];return html+(r?'<span class="ops-client-review">Revisar crédito: '+esc(date(r.date))+' · '+esc(r.priority)+'</span>':'')+(opsAdmin()?'<button type="button" class="tracking-link" data-ops-action="credit-review" data-value="'+esc(id)+'">'+(r?'Editar revisión':'Programar revisión')+'</button>':'');};
 const opsOriginalInvoiceRow=invoiceRow;
@@ -61,7 +62,5 @@ const opsResetBeforeOperations=resetCollectionTools;
 resetCollectionTools=function(){opsResetBeforeOperations();operationsState={user:null,ready:false,version:0,payload:{company:{},creditReviews:{},virtuals:[],attachments:[]},error:''};opsBasePayload=null;opsConflict=null;opsAuditRows=[];opsReportModel=null;opsPendingMessage='';opsDocumentCustomer='';opsDocumentRecord='';opsVirtualCustomer='';for(const id of ['opsPanel','opsExecutive','opsHealth'])if($(id))$(id).innerHTML='';};
 
 executiveRisk=function(){const byId=new Map(customerRollup().map(c=>[c.id,c]));return buildHoldReview().filter(r=>r.included&&r.accounts.some(a=>a.currency===selectedCurrency()&&a.debt>0)).map(r=>({...byId.get(r.customer.id),reasons:holdReviewReasons(r)}));};
-const opsDrawBeforeReuse=draw;
-draw=function(id,type,data,extra={}){const chart=charts[id];if(chart&&chart.config?.type===type&&typeof chart.update==='function'){chart.data=data;chart.options={...chart.options,...extra};chart.update('none');return;}return opsDrawBeforeReuse(id,type,data,extra);};
 
 function opsConfigureMail(){const c=operationsState.payload?.company||{};ArBillingCore.mailDefaults.sender=c.email||'';ArBillingCore.mailDefaults.cc=c.copy_email||'';const form=$('reminderProviderForm');if(form?.elements){form.elements.sender.value=c.email||'';form.elements.replyTo.value=c.email||'';if(form.elements.copyEmail)form.elements.copyEmail.value=c.copy_email||'';}}

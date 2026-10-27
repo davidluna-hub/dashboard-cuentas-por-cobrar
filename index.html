@@ -422,12 +422,14 @@ function syncAppliedPayments(){const localIds=new Set(localPayments.map(p=>p.id)
 function saveLocalFeatureData(){resetQuickSearchCache();localStorage.setItem(localFeatureKey(),JSON.stringify({receipts,creditSettings,plans,promises,localPayments,archivedMovements,creditNotes,invoiceCancellations,holdPreferences,reminderSettings,reminderCustomers}));syncAppliedPayments();queueReminderCloudSave();}
 function applyLocalAllocations(receipt,allocations,credit=false){let left=cents(receipt.amount);for(const a of allocations){const inv=invoices.find(i=>i.id===a.invoice_id);if(!inv)continue;let need=cents(a.amount);if(credit){for(const old of receipts.filter(x=>x.customer_id===receipt.customer_id&&x.currency===receipt.currency&&receiptRemaining(x)>0).sort((x,y)=>x.payment_date.localeCompare(y.payment_date))){const take=Math.min(need,cents(receiptRemaining(old)));if(!take)continue;localPayments.push({id:uuid(),invoice_id:inv.id,receipt_id:old.id,credit_batch_id:old.id,amount:amount(take),currency:receipt.currency,payment_date:receipt.payment_date,payment_method:'Saldo a favor',ar_recorded_at:new Date().toISOString()});need-=take;if(!need)break;}}else{localPayments.push({id:uuid(),invoice_id:inv.id,receipt_id:receipt.id,amount:amount(need),currency:receipt.currency,payment_date:receipt.payment_date,payment_method:receipt.payment_method,reference:receipt.reference,ar_recorded_at:new Date().toISOString()});left-=need;}}}
 
-const today=()=>ArBillingCore.localDay();
+const businessDayFormatter=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Ciudad_Juarez',year:'numeric',month:'2-digit',day:'2-digit'});
+const today=()=>businessDayFormatter.format(new Date());
 function localDate(d){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}
 function date(s){if(!s)return '—';const d=new Date(String(s).slice(0,10)+'T12:00:00');return Number.isNaN(d.getTime())?'—':d.toLocaleDateString('es-MX',{day:'2-digit',month:'short',year:'numeric'});}
 const cents=n=>Math.round((Number(n)||0)*100);
 const amount=n=>n/100;
-const money=(n,c='USD')=>new Intl.NumberFormat('es-MX',{style:'currency',currency:c,maximumFractionDigits:2}).format(Number(n)||0);
+const moneyFormatters=new Map();
+const money=(n,c='USD')=>{if(!moneyFormatters.has(c))moneyFormatters.set(c,new Intl.NumberFormat('es-MX',{style:'currency',currency:c,maximumFractionDigits:2}));return moneyFormatters.get(c).format(Number(n)||0);};
 const fmt=n=>money(n,$('currency').value);
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const sum=(rows,key)=>amount(rows.reduce((n,r)=>n+cents(r[key]),0));
@@ -589,7 +591,14 @@ async function loadData(){
   }
 }function renderAll(){resetQuickSearchCache();fillSelects();const rows=currRows(),open=rows.filter(i=>i.balance>0),overdue=open.filter(i=>i.late>0),analysis=selectedAnalysisRows(),aOpen=analysis.filter(i=>i.balance>0);const cash=receipts.filter(r=>r.currency===selectedCurrency()),legacy=payments.filter(p=>p.currency===selectedCurrency()&&!p.receipt_id);$('overviewMetrics').innerHTML=metric('Saldo pendiente',fmt(sum(open,'balance')),`${open.length} facturas con saldo`,'＄')+metric('Cartera vencida',fmt(sum(overdue,'balance')),`${overdue.length} facturas vencidas`,'◷','red')+metric('Cobros recibidos',fmt(amount(cash.reduce((s,r)=>s+cents(r.amount),0)+legacy.reduce((s,p)=>s+cents(p.amount),0))),'Efectivo recibido, incluidos anticipos','↙','green')+metric('Clientes con saldo',new Set(open.map(i=>i.customer_id)).size,'Adeudo total de Cartón y Foam','♙');$('analysisMetrics').innerHTML=metric('Adeudo del negocio',fmt(sum(aOpen,'balance')),`${aOpen.length} facturas abiertas`,'▤')+metric('Saldo vencido',fmt(sum(aOpen.filter(i=>i.late),'balance')),'Según filtro de negocio','◷','red')+metric('Al corriente',fmt(sum(aOpen.filter(i=>!i.late),'balance')),'Facturas sin vencimiento','✓','green')+metric('Más de 60 días',fmt(sum(aOpen.filter(i=>i.late>60),'balance')),'Requiere seguimiento','⚑','amber');renderBusinessDebt(analysis);renderCreditHold(analysis);$('priorityTable').innerHTML=table([...overdue].sort((a,b)=>b.late-a.late).slice(0,8).map(i=>`<tr><td><b>${esc(i.customer?.legal_name)}</b></td><td>${esc(i.invoice_number)}</td><td>${i.late} días</td><td><b>${fmt(i.balance)}</b></td><td><button class="pill" data-new-promise="${esc(i.id)}">Agendar promesa</button></td></tr>`),['Cliente','Factura','Días vencidos','Saldo','Seguimiento']);renderFilteredInvoiceTable(rows);const sc=$('statementCustomer').value,ss=$('statementSearch').value.toLowerCase(),stmt=rows.filter(i=>(sc==='all'||i.customer_id===sc)&&`${i.invoice_number} ${i.customer?.legal_name||''}`.toLowerCase().includes(ss));const a=sc==='all'?null:accountSummary(sc,selectedCurrency()),credits=a?a.credit:sum(customerRollup(),'credit');$('statementMetrics').innerHTML=metric('Facturado',fmt(sum(stmt,'total')),`${stmt.length} facturas en filtro`,'▤')+metric('Pagos aplicados',fmt(sum(stmt,'paid')),'Incluye aplicaciones de anticipos','↙','green')+metric('Facturas pendientes',fmt(sum(stmt,'balance')),'Saldo por factura','＄')+metric('Saldo a favor',fmt(credits),'Disponible del cliente, sin filtrar folios','↙','green');$('statementAccountSummary').innerHTML=a?`<div class="account-banner"><div><b>${esc(customerName(sc))}</b><div class="meta">Posición neta: ${a.net<0?'a favor del cliente':'por cobrar'} <b>${fmt(Math.abs(a.net))}</b></div><div class="meta">Plazo ${termsFor(sc).credit_days} días · ${a.limit===null?'Límite sin asignar':'Límite '+fmt(a.limit)+' · Disponible '+fmt(a.available)}</div></div><button class="green-btn" data-client-statement="${esc(sc)}">Abrir estado de cuenta completo</button></div>`:'';$('statementTable').innerHTML=opsStatementTableHTML(stmt);renderCustomerCards();renderCashHistory();renderPromises();renderOverviewExtras();renderPaymentAllocations();updateInvoiceCredit();renderCharts();document.querySelectorAll('.curLabel').forEach(el=>el.textContent=selectedCurrency());document.querySelectorAll('[data-feature]').forEach(el=>el.disabled=!featuresReady);updateInvoiceCredit();updatePaymentSummary();updatePromisePreview();}
 
-function draw(id,type,data,extra={}){const el=$(id);if(!el||!window.Chart)return;charts[id]?.destroy();charts[id]=new Chart(el,{type,data,options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:type==='doughnut'?'bottom':'top',labels:{usePointStyle:true,boxWidth:8,padding:16,font:{size:10}}}},scales:type==='doughnut'?{}:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{callback:v=>new Intl.NumberFormat('es-MX',{notation:'compact',maximumFractionDigits:1}).format(v)}}},...extra}});}
+function draw(id,type,data,extra={}){
+ const el=$(id);if(!el||!window.Chart)return;
+ const options={responsive:true,maintainAspectRatio:false,animation:false,plugins:{legend:{position:type==='doughnut'?'bottom':'top',labels:{usePointStyle:true,boxWidth:8,padding:16,font:{size:10}}}},scales:type==='doughnut'?{}:{x:{grid:{display:false}},y:{beginAtZero:true,ticks:{callback:v=>new Intl.NumberFormat('es-MX',{notation:'compact',maximumFractionDigits:1}).format(v)}}},...extra};
+ const chart=charts[id];
+ if(chart&&chart.config?.type===type&&typeof chart.update==='function'){chart.data=data;chart.options=options;chart.update('none');return;}
+ chart?.destroy();charts[id]=new window.Chart(el,{type,data,options});
+}
+
 function renderChartsOriginal(){
   if(!['overview','analysis'].includes(activeTab))return;
   const cur=selectedCurrency();
@@ -597,6 +606,7 @@ function renderChartsOriginal(){
   const allOpen=rows.filter(i=>i.balance>0);
   const analysis=selectedAnalysisRows();
   const open=analysis.filter(i=>i.balance>0);
+  if(activeTab==='overview'){
   const labels=[],billed=[],collected=[];
   for(let k=5;k>=0;k--){
     const d=new Date();d.setDate(1);d.setMonth(d.getMonth()-k);
@@ -613,10 +623,10 @@ function renderChartsOriginal(){
   const businessColors={'Cartón':'#07864f','Foam':'#77c49a','Otro':'#b9d4c3'};
   $('overviewBusinessCaption').textContent='Saldo pendiente: '+fmt(sum(allOpen,'balance'))+' · valores según el negocio registrado en cada factura.';
   draw('businessDebtChart','bar',{labels:businessLabels,datasets:[{label:'Adeudo pendiente',data:businessLabels.map(x=>amount(businessTotals[x])),backgroundColor:businessLabels.map(x=>businessColors[x]),borderRadius:7,barThickness:25}]},{indexAxis:'y',plugins:{legend:{display:false},tooltip:{callbacks:{label:function(context){return ' '+money(context.parsed.x,cur);}}}},scales:{x:{beginAtZero:true,grid:{color:'#edf1ee'},ticks:{callback:function(v){return new Intl.NumberFormat('es-MX',{notation:'compact',maximumFractionDigits:1}).format(v);}}},y:{grid:{display:false}}}});
+  }
+  if(activeTab!=='analysis')return;
   const ageLabels=['Al corriente','1–30 días','31–60 días','Más de 60'];
   const ageColors=['#07864f','#77c49a','#edbc5a','#cc5960'];
-  const agingAll=[sum(allOpen.filter(i=>!i.late),'balance'),sum(allOpen.filter(i=>i.late>0&&i.late<=30),'balance'),sum(allOpen.filter(i=>i.late>30&&i.late<=60),'balance'),sum(allOpen.filter(i=>i.late>60),'balance')];
-  draw('agingChart','doughnut',{labels:ageLabels,datasets:[{data:agingAll,backgroundColor:ageColors,borderWidth:0,hoverOffset:5}]},{cutout:'68%'});
   const agingAnalysis=[sum(open.filter(i=>!i.late),'balance'),sum(open.filter(i=>i.late>0&&i.late<=30),'balance'),sum(open.filter(i=>i.late>30&&i.late<=60),'balance'),sum(open.filter(i=>i.late>60),'balance')];
   draw('agingBars','bar',{labels:ageLabels,datasets:[{label:'Saldo abierto',data:agingAnalysis,backgroundColor:ageColors,borderRadius:6}]},{plugins:{legend:{display:false}}});
   draw('complianceChart','doughnut',{labels:['Liquidadas','Con saldo'],datasets:[{data:[analysis.filter(i=>i.balance===0).length,open.length],backgroundColor:['#07864f','#e7ece8'],borderWidth:0}]},{cutout:'70%'});
@@ -751,7 +761,7 @@ function renderOverviewExtras(){
 }
 function renderCharts(){
  renderChartsOriginal();
- if(!['overview','analysis'].includes(activeTab))return;
+ if(activeTab!=='overview')return;
  const details=promiseDetails().filter(p=>p.currency===selectedCurrency()&&p.state!=='cancelled'&&p.scheduled_date<=today());
  const onTime=details.filter(p=>p.state==='fulfilled'&&p.completed_date&&p.completed_date<=p.scheduled_date).length;
  const late=details.filter(p=>p.state==='fulfilled'&&p.completed_date>p.scheduled_date).length;
@@ -2388,12 +2398,14 @@ function renderOpsExecutive(){
 }
 
 function renderOperations(){
- renderOpsHealth();renderOpsExecutive();if(activeTab!=='operations'||!$('opsPanel'))return;
+ if(activeTab!=='operations'||!$('opsPanel'))return;
+ return opsWithCalculationCache(()=>{
  for(const b of document.querySelectorAll('[data-ops-tab]'))b.setAttribute('aria-selected',String(b.dataset.opsTab===operationsTab));
  $('opsStatus').textContent=operationsState.error||(!operationsState.ready?'Cargando herramientas…':'Datos compartidos · '+date(today())+' · '+selectedCurrency());
  const render={day:renderOpsDay,reports:renderOpsReports,quality:renderOpsQuality,audit:renderOpsAudit,documents:renderOpsDocuments,virtuals:renderOpsVirtuals,settings:renderOpsSettings}[operationsTab];render?.();
+ });
 }
-function openOperations(tab='day'){operationsTab=tab;go('operations');renderOperations();if(tab==='audit')loadOpsAudit();}
+function openOperations(tab='day'){operationsTab=tab;go('operations');if(tab==='audit')return loadOpsAudit();}
 function renderOpsDay(){
  const day=today(),rows=[...(collectionModels.agenda||[])],cur=selectedCurrency(),reviews=operationsState.payload.creditReviews||{};
  for(const c of customers){if(rows.some(r=>r.customer.id===c.id))continue;const review=reviews[c.id],a=accountSummary(c.id,cur),reasons=[];if(review?.date&&review.date<=day)reasons.push('Revisión de crédito: '+date(review.date));if(a.exceeded)reasons.push('Crédito autorizado excedido');if(!reasons.length)continue;rows.push({customer:c,reasons,overdue:a.overdue,lastActivity:collectionModels.behavior.get(c.id)?.lastActivity});}
@@ -2553,10 +2565,11 @@ const opsOriginalEnriched=enriched;
 enriched=function(){if(opsCache?.rows)return opsCache.rows;const rows=opsOriginalEnriched();if(opsCache)opsCache.rows=rows;return rows;};
 const opsOriginalSummary=accountSummary;
 accountSummary=function(id,currency){const key=id+'|'+currency;if(opsCache?.accounts.has(key))return opsCache.accounts.get(key);const a=opsOriginalSummary(id,currency);opsCache?.accounts.set(key,a);return a;};
+function opsWithCalculationCache(work){if(opsCache)return work();opsCache={rows:null,accounts:new Map()};try{return work();}finally{opsCache=null;}}
 const opsOriginalRender=renderAll;
-renderAll=function(){opsCache={rows:null,accounts:new Map()};try{const result=opsOriginalRender();renderOperations();return result;}finally{opsCache=null;}};
+renderAll=function(){return opsWithCalculationCache(()=>{const result=opsOriginalRender();renderOpsHealth();renderOpsExecutive();renderOperations();return result;});};
 const opsOriginalGo=go;
-go=function(tab){opsOriginalGo(tab);if(tab==='operations'){$('crumb').textContent='Herramientas de cobranza';renderOperations();}};
+go=function(tab){return opsWithCalculationCache(()=>{opsOriginalGo(tab);if(tab==='operations'){$('crumb').textContent='Herramientas de cobranza';renderOperations();}});};
 const opsOriginalBehavior=customerBehaviorSummary;
 customerBehaviorSummary=function(id){const html=opsOriginalBehavior(id),r=operationsState.payload?.creditReviews?.[id];return html+(r?'<span class="ops-client-review">Revisar crédito: '+esc(date(r.date))+' · '+esc(r.priority)+'</span>':'')+(opsAdmin()?'<button type="button" class="tracking-link" data-ops-action="credit-review" data-value="'+esc(id)+'">'+(r?'Editar revisión':'Programar revisión')+'</button>':'');};
 const opsOriginalInvoiceRow=invoiceRow;
@@ -2569,8 +2582,6 @@ const opsResetBeforeOperations=resetCollectionTools;
 resetCollectionTools=function(){opsResetBeforeOperations();operationsState={user:null,ready:false,version:0,payload:{company:{},creditReviews:{},virtuals:[],attachments:[]},error:''};opsBasePayload=null;opsConflict=null;opsAuditRows=[];opsReportModel=null;opsPendingMessage='';opsDocumentCustomer='';opsDocumentRecord='';opsVirtualCustomer='';for(const id of ['opsPanel','opsExecutive','opsHealth'])if($(id))$(id).innerHTML='';};
 
 executiveRisk=function(){const byId=new Map(customerRollup().map(c=>[c.id,c]));return buildHoldReview().filter(r=>r.included&&r.accounts.some(a=>a.currency===selectedCurrency()&&a.debt>0)).map(r=>({...byId.get(r.customer.id),reasons:holdReviewReasons(r)}));};
-const opsDrawBeforeReuse=draw;
-draw=function(id,type,data,extra={}){const chart=charts[id];if(chart&&chart.config?.type===type&&typeof chart.update==='function'){chart.data=data;chart.options={...chart.options,...extra};chart.update('none');return;}return opsDrawBeforeReuse(id,type,data,extra);};
 
 function opsConfigureMail(){const c=operationsState.payload?.company||{};ArBillingCore.mailDefaults.sender=c.email||'';ArBillingCore.mailDefaults.cc=c.copy_email||'';const form=$('reminderProviderForm');if(form?.elements){form.elements.sender.value=c.email||'';form.elements.replyTo.value=c.email||'';if(form.elements.copyEmail)form.elements.copyEmail.value=c.copy_email||'';}}
 
@@ -2614,7 +2625,7 @@ async function opsHandleAction(action,value,button){
  if(action==='statement-mode'){opsStatementSummary=!opsStatementSummary;return openClientStatement($('clientStatementModal').dataset.customerId);}
  if(action==='formal-promise')return opsFormalPromise(value);
 }
-document.addEventListener('click',async event=>{const b=event.target.closest?.('button');if(!b)return;if(b.dataset.opsTab){openOperations(b.dataset.opsTab);return;}if(!b.dataset.opsAction)return;b.disabled=true;try{await opsHandleAction(b.dataset.opsAction,b.dataset.value||'',b);}catch(e){showMsg(e.message||'No se pudo completar la acción.','error');}finally{if(b.isConnected!==false)b.disabled=false;}});
+document.addEventListener('click',async event=>{const b=event.target.closest?.('button');if(!b)return;if(!b.dataset.opsTab&&!b.dataset.opsAction)return;if(b.disabled)return;b.disabled=true;try{if(b.dataset.opsTab)await openOperations(b.dataset.opsTab);else await opsHandleAction(b.dataset.opsAction,b.dataset.value||'',b);}catch(e){showMsg(e.message||'No se pudo completar la acción.','error');}finally{if(b.isConnected!==false)b.disabled=false;}});
 document.addEventListener('change',event=>{
  const id=event.target.id;if(id.startsWith('opsReport')){opsReportPage=0;updateOpsReport();}
  if(id==='opsDocumentCustomer'||id==='opsDocumentEntity'){opsDocumentCustomer=$('opsDocumentCustomer').value;opsDocumentEntity=$('opsDocumentEntity').value;opsDocumentRecord='';renderOpsDocuments();}
@@ -2627,7 +2638,8 @@ document.addEventListener('submit',async e=>{
  const actions={opsCompanyForm:saveOpsCompany,opsCreditReviewForm:saveOpsCreditReview,opsVirtualForm:saveOpsVirtual,opsDocumentForm:uploadOpsDocument,opsConflictForm:saveOpsConflict,opsPasswordForm:async event=>{event.preventDefault();const f=event.target.elements;if(f.password.value!==f.confirm.value)throw Error('Las contraseñas no coinciden.');if(f.password.value.length<12)throw Error('Utiliza al menos 12 caracteres.');const {error}=await sb.auth.updateUser({password:f.password.value});f.password.value='';f.confirm.value='';if(error)throw error;opsOriginalMsg('Tu contraseña fue actualizada.','success','opsPasswordFeedback');}};
  const run=actions[e.target.id];if(!run)return;e.preventDefault();const b=e.submitter;if(b)b.disabled=true;try{await run(e);}catch(error){opsOriginalMsg(error.message||'No se pudo guardar.','error',e.target.id==='opsPasswordForm'?'opsPasswordFeedback':'globalMsg');}finally{if(b&&b.isConnected!==false)b.disabled=false;}
 });
-$('opsReload').addEventListener('click',async()=>{await loadCollectionData();renderOperations();});
+let opsReloadPending=false;
+$('opsReload').addEventListener('click',async e=>{if(opsReloadPending)return;opsReloadPending=true;const button=e.currentTarget;button.disabled=true;try{await loadCollectionData();renderOperations();}catch(error){showMsg(error.message||'No se pudieron actualizar las herramientas.','error');}finally{opsReloadPending=false;button.disabled=false;}});
 let opsStatementPage=0,opsCashPage=0,opsApplicationPage=0;
 function opsPager(page,total,kind){const pages=Math.max(1,Math.ceil(total/50));return '<div class="invoice-pager">'+opsAction('Anterior',kind+'-prev','',page===0)+'<span>Página '+(page+1)+' de '+pages+' · '+total+' registros</span>'+opsAction('Siguiente',kind+'-next','',page>=pages-1)+'</div>';}
 function opsStatementTableHTML(rows){opsStatementPage=Math.min(opsStatementPage,Math.max(0,Math.ceil(rows.length/50)-1));return table(rows.slice(opsStatementPage*50,(opsStatementPage+1)*50).map(invoiceRow),invoiceHeaders)+opsPager(opsStatementPage,rows.length,'statement');}

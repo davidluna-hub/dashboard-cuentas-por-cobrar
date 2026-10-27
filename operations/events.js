@@ -38,7 +38,7 @@ async function opsHandleAction(action,value,button){
  if(action==='statement-mode'){opsStatementSummary=!opsStatementSummary;return openClientStatement($('clientStatementModal').dataset.customerId);}
  if(action==='formal-promise')return opsFormalPromise(value);
 }
-document.addEventListener('click',async event=>{const b=event.target.closest?.('button');if(!b)return;if(b.dataset.opsTab){openOperations(b.dataset.opsTab);return;}if(!b.dataset.opsAction)return;b.disabled=true;try{await opsHandleAction(b.dataset.opsAction,b.dataset.value||'',b);}catch(e){showMsg(e.message||'No se pudo completar la acción.','error');}finally{if(b.isConnected!==false)b.disabled=false;}});
+document.addEventListener('click',async event=>{const b=event.target.closest?.('button');if(!b)return;if(!b.dataset.opsTab&&!b.dataset.opsAction)return;if(b.disabled)return;b.disabled=true;try{if(b.dataset.opsTab)await openOperations(b.dataset.opsTab);else await opsHandleAction(b.dataset.opsAction,b.dataset.value||'',b);}catch(e){showMsg(e.message||'No se pudo completar la acción.','error');}finally{if(b.isConnected!==false)b.disabled=false;}});
 document.addEventListener('change',event=>{
  const id=event.target.id;if(id.startsWith('opsReport')){opsReportPage=0;updateOpsReport();}
  if(id==='opsDocumentCustomer'||id==='opsDocumentEntity'){opsDocumentCustomer=$('opsDocumentCustomer').value;opsDocumentEntity=$('opsDocumentEntity').value;opsDocumentRecord='';renderOpsDocuments();}
@@ -51,7 +51,8 @@ document.addEventListener('submit',async e=>{
  const actions={opsCompanyForm:saveOpsCompany,opsCreditReviewForm:saveOpsCreditReview,opsVirtualForm:saveOpsVirtual,opsDocumentForm:uploadOpsDocument,opsConflictForm:saveOpsConflict,opsPasswordForm:async event=>{event.preventDefault();const f=event.target.elements;if(f.password.value!==f.confirm.value)throw Error('Las contraseñas no coinciden.');if(f.password.value.length<12)throw Error('Utiliza al menos 12 caracteres.');const {error}=await sb.auth.updateUser({password:f.password.value});f.password.value='';f.confirm.value='';if(error)throw error;opsOriginalMsg('Tu contraseña fue actualizada.','success','opsPasswordFeedback');}};
  const run=actions[e.target.id];if(!run)return;e.preventDefault();const b=e.submitter;if(b)b.disabled=true;try{await run(e);}catch(error){opsOriginalMsg(error.message||'No se pudo guardar.','error',e.target.id==='opsPasswordForm'?'opsPasswordFeedback':'globalMsg');}finally{if(b&&b.isConnected!==false)b.disabled=false;}
 });
-$('opsReload').addEventListener('click',async()=>{await loadCollectionData();renderOperations();});
+let opsReloadPending=false;
+$('opsReload').addEventListener('click',async e=>{if(opsReloadPending)return;opsReloadPending=true;const button=e.currentTarget;button.disabled=true;try{await loadCollectionData();renderOperations();}catch(error){showMsg(error.message||'No se pudieron actualizar las herramientas.','error');}finally{opsReloadPending=false;button.disabled=false;}});
 let opsStatementPage=0,opsCashPage=0,opsApplicationPage=0;
 function opsPager(page,total,kind){const pages=Math.max(1,Math.ceil(total/50));return '<div class="invoice-pager">'+opsAction('Anterior',kind+'-prev','',page===0)+'<span>Página '+(page+1)+' de '+pages+' · '+total+' registros</span>'+opsAction('Siguiente',kind+'-next','',page>=pages-1)+'</div>';}
 function opsStatementTableHTML(rows){opsStatementPage=Math.min(opsStatementPage,Math.max(0,Math.ceil(rows.length/50)-1));return table(rows.slice(opsStatementPage*50,(opsStatementPage+1)*50).map(invoiceRow),invoiceHeaders)+opsPager(opsStatementPage,rows.length,'statement');}

@@ -28,12 +28,14 @@ function renderOpsExecutive(){
 }
 
 function renderOperations(){
- renderOpsHealth();renderOpsExecutive();if(activeTab!=='operations'||!$('opsPanel'))return;
+ if(activeTab!=='operations'||!$('opsPanel'))return;
+ return opsWithCalculationCache(()=>{
  for(const b of document.querySelectorAll('[data-ops-tab]'))b.setAttribute('aria-selected',String(b.dataset.opsTab===operationsTab));
  $('opsStatus').textContent=operationsState.error||(!operationsState.ready?'Cargando herramientas…':'Datos compartidos · '+date(today())+' · '+selectedCurrency());
  const render={day:renderOpsDay,reports:renderOpsReports,quality:renderOpsQuality,audit:renderOpsAudit,documents:renderOpsDocuments,virtuals:renderOpsVirtuals,settings:renderOpsSettings}[operationsTab];render?.();
+ });
 }
-function openOperations(tab='day'){operationsTab=tab;go('operations');renderOperations();if(tab==='audit')loadOpsAudit();}
+function openOperations(tab='day'){operationsTab=tab;go('operations');if(tab==='audit')return loadOpsAudit();}
 function renderOpsDay(){
  const day=today(),rows=[...(collectionModels.agenda||[])],cur=selectedCurrency(),reviews=operationsState.payload.creditReviews||{};
  for(const c of customers){if(rows.some(r=>r.customer.id===c.id))continue;const review=reviews[c.id],a=accountSummary(c.id,cur),reasons=[];if(review?.date&&review.date<=day)reasons.push('Revisión de crédito: '+date(review.date));if(a.exceeded)reasons.push('Crédito autorizado excedido');if(!reasons.length)continue;rows.push({customer:c,reasons,overdue:a.overdue,lastActivity:collectionModels.behavior.get(c.id)?.lastActivity});}
