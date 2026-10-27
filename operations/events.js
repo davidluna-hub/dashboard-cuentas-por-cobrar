@@ -13,7 +13,7 @@ async function opsHandleAction(action,value,button){
  if(action==='client')return openCollectionClient(value);
  if(action==='activity')return openCollectionActivity(null,value);
  if(action==='statement')return openClientStatement(value);
- if(action==='invoice')return openInvoiceEditor(value);
+ if(action==='invoice')return opsReviewInvoice(value);
  if(action==='customer')return openCustomerEditor(value);
  if(action==='payments')return go('payments');
  if(action==='invoice-prev'||action==='invoice-next'){opsInvoicePage+=action==='invoice-next'?1:-1;return renderInvoiceSearchOnly();}
