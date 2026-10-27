@@ -1,0 +1,1 @@
+{"name":"amao-cuentas-por-cobrar","version":"2.1.0","private":true,"description":"Dashboard AMAO de cartera y cobranza","scripts":{"build":"node tools/build.cjs && node tools/prepare-functions.cjs","test":"node tools/test.cjs"},"engines":{"node":">=24"},"devDependencies":{"@napi-rs/canvas":"0.1.100","pdf-lib":"1.17.1"}}

@@ -1,0 +1,8 @@
+module.exports=function(count=8){
+ const core=require('./core.js'),customer={id:'c',legal_name:'CLIENTE EJEMPLO DEL NORTE, S.A. DE C.V.',tax_id:'CEN010101AAA',customer_code:'CLI-001',email:'tesoreria@example.com',phone:'(656) 555-0100',notes:JSON.stringify({amao_customer_profile:1,address:'Av. Ejemplo 120, Ciudad Juárez, Chihuahua'})};
+ const invoices=Array.from({length:count},(_,i)=>({id:'i'+i,customer_id:'c',invoice_number:'INV/2026/'+String(i+1).padStart(4,'0'),invoice_date:'2026-09-15',due_date:i===0?'2026-10-15':i===1?'2026-10-23':i===2?'2026-10-22':'2026-10-30',currency:i%3===0?'USD':'MXN',total:12345.67+i*90,status:'abierta',business_line:i%2?'Carton':'Foam'}));
+ invoices.push({id:'paid',customer_id:'c',invoice_number:'LIQUIDADA-EXCLUIR',invoice_date:'2026-08-01',due_date:'2026-08-30',currency:'MXN',total:50,status:'abierta'},{id:'cancelled',customer_id:'c',invoice_number:'CANCELADA-EXCLUIR',invoice_date:'2026-08-01',due_date:'2026-08-30',currency:'MXN',total:50,status:'cancelada'});
+ const payments=[{id:'paid-payment',invoice_id:'paid',currency:'MXN',amount:50,payment_date:'2026-09-10'},{id:'abono',invoice_id:'i0',currency:'USD',amount:2000,payment_date:'2026-10-20',receipt_id:'r'}];
+ const state={creditSettings:[{customer_id:'c',credit_days:30,limit_mxn:500000,limit_usd:50000}],receipts:[{id:'r',customer_id:'c',currency:'USD',amount:2500,payment_date:'2026-10-20',ar_recorded_at:'2026-10-20T12:00:00Z'}],plans:[{id:'plan',created_at:'2026-10-21T00:00:00Z',kind:'schedule',baseline_receipt_ids:['r']}],promises:[{id:'q',plan_id:'plan',customer_id:'c',currency:'USD',invoice_id:'i0',amount:3000,scheduled_date:'2026-10-26',installment:1}]};
+ return core.buildLedger([customer],invoices,payments,state,'2026-10-22')[0];
+};
