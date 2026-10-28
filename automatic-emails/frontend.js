@@ -54,6 +54,38 @@ async function buildStatementFiles(){if(!window.html2canvas||!window.jspdf)throw
 function billingNotificationPreview(id){
  const a=clientStatementAccount(id);return a?ArBillingCore.reminders(a,currentBillingPayload(),today()):null;
 }
+function holdNoticeFacts(id){
+ const row=buildHoldReview().find(r=>r.customer.id===id),account=clientStatementAccount(id);if(!row||!account)return null;
+ const overdue=row.accounts.filter(a=>a.overdue>0).map(a=>({currency:a.currency,amount:a.overdue,days:a.maxLate})),credit=row.accounts.filter(a=>a.limit!==null&&a.limit>0&&a.debt>0).map(a=>({currency:a.currency,debt:a.debt,limit:a.limit,percent:Math.round(a.debt/a.limit*100),excess:a.excess}));
+ const nearDays=overdue.some(a=>a.days<holdPreferences.days),nearLimit=credit.some(a=>a.percent>=80&&a.excess===0),already=row.automatic;
+ const reasons=[];for(const a of overdue)reasons.push('Saldo vencido de '+money(a.amount,a.currency)+' '+a.currency+'; máximo registrado: '+a.days+' día'+(a.days===1?'':'s')+'.');
+ for(const a of credit){reasons.push('Crédito utilizado: '+money(a.debt,a.currency)+' de '+money(a.limit,a.currency)+' '+a.currency+' ('+a.percent+'%).');if(a.excess>0)reasons.push('Límite excedido en '+money(a.excess,a.currency)+' '+a.currency+'.');}
+ if(row.missed)reasons.push('Hay una promesa de pago vencida sin liquidar en los registros.');
+ const state=already?'already':nearDays||nearLimit?'near':'no_signal';
+ const status=state==='already'?'Ya cumple criterio(s) actual(es) de Credit Hold':state==='near'?'Aviso preventivo: señales registradas antes del criterio de Credit Hold':'Revisión preventiva: sin una señal de proximidad registrada';
+ const lead=state==='already'?'Conforme a los datos registrados, esta cuenta ya cumple criterio(s) vigente(s) de Credit Hold. Los motivos comprobables al corte son:':state==='near'?'Conforme a los datos registrados, esta cuenta todavía no alcanza los criterios actuales de Credit Hold. Se comparten estas señales preventivas para revisar la cuenta:':'Al corte, los datos disponibles no muestran un criterio actual ni una señal cercana que permita afirmar una causa de Credit Hold. Compartimos el saldo registrado para su revisión.';
+ const balances=row.accounts.filter(a=>a.debt>0).map(a=>a.currency+': pendiente '+money(a.debt,a.currency)+(a.overdue>0?' · vencido '+money(a.overdue,a.currency):'')).join('\n')||'Sin saldo pendiente registrado.';
+ const details=reasons.length?reasons.map(x=>'• '+x).join('\n'):'No hay datos de vencimiento, límite excedido o promesa incumplida que sustenten otra causa.';
+ const subject=(state==='already'?'Credit Hold · ':'Aviso preventivo de Credit Hold · ')+row.customer.legal_name+' · '+ArBillingCore.statementDate(today());
+ const body='Estimado cliente '+row.customer.legal_name+':\n\n'+lead+'\n\n'+details+'\n\nSaldo por moneda al '+ArBillingCore.statementDate(today())+':\n'+balances+'\n\n'+(nearLimit?'Como referencia preventiva, el uso de crédito igual o mayor a 80% se muestra para revisión; este indicador por sí solo no significa que la cuenta esté en Credit Hold.\n\n':'')+'Agradeceremos revisar esta información y compartir cualquier aclaración o comprobante pendiente. Si ya realizó un pago, favor de enviarnos el comprobante para actualizar la conciliación.\n\nAtentamente,\nAMAO Servicio y Comercio, S.A. de C.V.';
+ return {row,account,state,status,subject,body,to:ArBillingCore.recipients(row.customer,reminderCustomers[id]||{})};
+}
+function openHoldNoticePreview(id){
+ const facts=holdNoticeFacts(id);if(!facts)return;
+ $('detailTitle').textContent='Aviso preventivo de Credit Hold · '+facts.row.customer.legal_name;
+ $('detailContent').innerHTML='<form id="holdNoticePreviewForm"><div class="notice '+(facts.state==='already'?'warning':'success')+'"><b>'+esc(facts.status)+'.</b><br>Los motivos se preparan con la cartera actual. Revisa todo antes de abrir tu correo; no se envía automáticamente.</div><p class="meta">“Ya cumple criterios” es el cálculo del dashboard; el estado real del bloqueo en Odoo no se consulta aquí.</p><div class="form-field"><label for="holdNoticeTo">Para · contactos registrados</label><input id="holdNoticeTo" class="field" type="text" value="'+esc(facts.to.join('; '))+'" placeholder="correo@cliente.com; otro@cliente.com"><span class="meta">Se muestran los contactos habilitados para recibir avisos. Puedes corregir destinatarios antes de crear el borrador.</span></div><div class="form-field"><label for="holdNoticeCc">Copia</label><input id="holdNoticeCc" class="field" type="email" value="'+esc(opsCompany().copy_email||'')+'" readonly></div><div class="form-field"><label for="holdNoticeSubject">Asunto</label><input id="holdNoticeSubject" class="field" value="'+esc(facts.subject)+'" required></div><div class="form-field"><label for="holdNoticeBody">Vista previa del correo</label><textarea id="holdNoticeBody" class="field" rows="16" required>'+esc(facts.body)+'</textarea></div><p class="meta">Abrir borrador prepara el correo en tu aplicación predeterminada. Revisa destinatarios y adjunta el estado de cuenta si lo necesitas. La lista de Credit Hold y el aviso preventivo se manejan manualmente.</p><div id="holdNoticeFeedback" class="meta" role="status"></div><div class="form-actions"><button type="button" class="pill" data-close-hold-notice>Cerrar</button><button type="submit" class="green-btn">Abrir borrador de correo</button></div></form>';
+ $('detailModal').classList.add('open');$('holdNoticeTo').focus();
+}
+$('emailCreditHoldNotice').addEventListener('click',()=>openHoldNoticePreview($('clientStatementModal').dataset.customerId));
+$('detailContent').addEventListener('click',e=>{if(e.target.closest('[data-close-hold-notice]'))$('detailModal').classList.remove('open');});
+$('detailContent').addEventListener('submit',e=>{
+ if(e.target.id!=='holdNoticePreviewForm')return;e.preventDefault();
+ const to=[...new Set($('holdNoticeTo').value.split(/[;,\s]+/).map(v=>v.trim().toLowerCase()).filter(Boolean))],valid=to.filter(v=>/^[^\s@,;]+@[^\s@,;]+\.[^\s@,;]+$/.test(v));
+ if(!valid.length){$('holdNoticeFeedback').textContent='Agrega al menos un correo válido registrado o confirmado antes de continuar.';return;}
+ const cc=$('holdNoticeCc').value.trim(),subject=encodeURIComponent($('holdNoticeSubject').value.trim()),body=encodeURIComponent($('holdNoticeBody').value);
+ window.location.href='mailto:'+encodeURIComponent(valid.join(';'))+(cc?'?cc='+encodeURIComponent(cc)+'&subject='+subject+'&body='+body:'?subject='+subject+'&body='+body);
+ $('holdNoticeFeedback').textContent='Borrador preparado. Confirma los destinatarios en tu correo y envía cuando estés listo.';
+});
 async function reminderCloudLoad(local){
  reminderServiceFeedback='';
  while(reminderCloud.ready&&(reminderCloud.busy||reminderCloud.queued))await flushReminderCloud();

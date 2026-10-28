@@ -53,6 +53,13 @@ function input(form,name,value){form.elements.namedItem(name).value=value;}
 async function submit(form){assert(form.checkValidity(),'Form '+form.id+' must pass native validation: '+[...form.elements].filter(e=>e.validity&&!e.validity.valid).map(e=>e.name+': '+e.validationMessage).join('; '));form.requestSubmit(form.querySelector('button[type="submit"]'));await settle();}
 const financial=run('JSON.stringify({customers,invoices,payments,receipts,localPayments,plans,promises,creditNotes,creditSettings,invoiceCancellations})');
 (async()=>{try{
+ // Credit Hold publication stays one complete image and preview text separates actual hold from early signals.
+ const single=JSON.parse(run('JSON.stringify({pages:holdSharePages(Array.from({length:25},(_,n)=>n)),selector:!!document.getElementById("holdSharePage")})'));
+ assert.equal(single.pages.length,1,'The full Credit Hold publication is one image');assert.equal(single.pages[0].length,25,'No clients are dropped from the single image');assert.equal(single.selector,false,'There is no page selector');
+ assert.equal(run('holdNoticeFacts("c1").state'),'already','Credit limit excess is identified as an active criterion');
+ assert.equal(run('holdNoticeFacts("c2").state'),'near','Overdue days below the active threshold are preventive only');
+ run("openHoldNoticePreview('c2')");assert(get('#detailContent').textContent.includes('todavía no alcanza los criterios actuales'),'Preview does not state that a preventive client is already in hold');assert.equal(get('#holdNoticeTo').value,'','No contact is invented when the customer has none');assert.match(get('#holdNoticeBody').value,/máximo registrado: \d+ días/);
+ closeModals();
  // Regression: a tab left open overnight must accept the new local date.
  const currentLocalDate=run('today()');
  const invoiceField=get('#invDate'),paymentField=get('#payDate');

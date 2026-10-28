@@ -13,7 +13,7 @@ function createDashboardClient(){
  }}});
 }
 let dashboardAccess={user:null,role:null,loading:false,error:''};
-const dashboardWriteIds=['quickNewInvoice','quickNewPayment','quickNewPromise','toggleInvoiceForm','toggleNewCustomer','newPromiseBtn','newCreditNote','pendingApplyCredit','pendingUseCustomer','pendingFromPayment','saveCollectionSnapshot','newCollectionActivity','importLegacyCredit','saveCustomerCredit','openMovementTrash','dashboardReminderToggle','dashboardReminderConfigure','emailClientStatement'];
+const dashboardWriteIds=['quickNewInvoice','quickNewPayment','quickNewPromise','toggleInvoiceForm','toggleNewCustomer','newPromiseBtn','newCreditNote','pendingApplyCredit','pendingUseCustomer','pendingFromPayment','saveCollectionSnapshot','newCollectionActivity','importLegacyCredit','saveCustomerCredit','openMovementTrash','dashboardReminderToggle','dashboardReminderConfigure','emailClientStatement','emailCreditHoldNotice'];
 const dashboardWriteAttributes=['edit-invoice','new-promise','cancel-invoice','archive-kind','edit-plan','pay-promise','reprogram-plan','credit-customer','use-credit','edit-customer','inline-credit','customer-reminders','edit-historical','edit-receipt','cancel-plan','pending-add','restore-movement','toggle-credit-note','hold-edit','hold-exclude','hold-auto','collection-edit','collection-done','collection-cancel','collection-new','tracking-update','tracking-payment','tracking-promises'];
 const dashboardWriteSelector=dashboardWriteIds.map(id=>'#'+id).concat(dashboardWriteAttributes.map(key=>'[data-'+key+']')).join(',');
 function dashboardWriteBlocked(){return dashboardAccess.loading||!!dashboardAccess.error||!['admin','facturacion','cobranza'].includes(dashboardAccess.role);}
