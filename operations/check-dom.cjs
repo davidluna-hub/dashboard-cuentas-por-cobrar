@@ -53,6 +53,22 @@ function input(form,name,value){form.elements.namedItem(name).value=value;}
 async function submit(form){assert(form.checkValidity(),'Form '+form.id+' must pass native validation: '+[...form.elements].filter(e=>e.validity&&!e.validity.valid).map(e=>e.name+': '+e.validationMessage).join('; '));form.requestSubmit(form.querySelector('button[type="submit"]'));await settle();}
 const financial=run('JSON.stringify({customers,invoices,payments,receipts,localPayments,plans,promises,creditNotes,creditSettings,invoiceCancellations})');
 (async()=>{try{
+ // Regression: a tab left open overnight must accept the new local date.
+ const currentLocalDate=run('today()');
+ const invoiceField=get('#invDate'),paymentField=get('#payDate');
+ invoiceField.max='2000-01-01';
+ paymentField.max='2000-01-01';
+ invoiceField.dispatchEvent(new w.Event('focusin',{bubbles:true}));
+ assert.equal(invoiceField.max,currentLocalDate,'Invoice date limit should refresh on focus');
+ assert.equal(paymentField.max,currentLocalDate,'Payment date limit should refresh along with the invoice date');
+ const editorField=document.createElement('input');
+ editorField.type='date';
+ editorField.id='editInvoiceDate';
+ editorField.max='2000-01-01';
+ document.body.append(editorField);
+ w.dispatchEvent(new w.Event('focus'));
+ assert.equal(editorField.max,currentLocalDate,'Invoice editor must refresh after returning to the dashboard');
+ editorField.remove();
  // Real DOM bubbling, hidden sections, selected tabs and keyboard navigation.
  for(const name of ['operations','invoices','payments','customers','promises','statements','collections','analysis','overview']){await click('[data-tab="'+name+'"]');assert(!document.getElementById('view-'+name).classList.contains('hidden'),name+' visible');assert.equal(document.querySelectorAll('.view:not(.hidden)').length,1);}
  assert(chartUpdates.some(x=>x.kind==='reset'),'Entering chart views restarts a short animation');
