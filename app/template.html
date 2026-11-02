@@ -588,10 +588,9 @@ $('emailClientStatement').addEventListener('click',async e=>{
  const c=customers.find(c=>c.id===$('clientStatementModal').dataset.customerId);if(!c)return;
  const btn=e.currentTarget;setBusy(btn,true,'Preparando archivos…');
  try{
-  await buildStatementFiles();
   const processingDate=ArBillingCore.statementDate(ArBillingCore.localDay(new Date(),'America/Ciudad_Juarez'));
-  const subject=encodeURIComponent('Estado de cuenta AMAO · '+c.legal_name+' · '+processingDate);
-  const body=encodeURIComponent(`Estimado cliente ${c.legal_name}:
+  const subject='Estado de cuenta AMAO · '+c.legal_name+' · '+processingDate;
+  const body=`Estimado cliente ${c.legal_name}:
 
 Compartimos su estado de cuenta para revisión. Agradeceremos cualquier aclaración o comprobante pendiente.
 
@@ -602,9 +601,11 @@ ${ArBillingCore.statementBanks(clientStatementAccount(c.id)).map(b=>[b.currency,
 Comprobantes: ${opsCompany().email||''} y ${opsCompany().copy_email||''}
 
 Atentamente,
-AMAO Servicio y Comercio, S.A. de C.V.`);
+AMAO Servicio y Comercio, S.A. de C.V.`;
   const routing=ArBillingCore.mailRouting(ArBillingCore.recipients(c,reminderCustomers[c.id]||{}));
-  window.location.href=`mailto:${encodeURIComponent(routing.to.join(';'))}?cc=${encodeURIComponent(routing.cc.join(';'))}&subject=${subject}&body=${body}`;
+  const mailto=billingMailto(routing.to,routing.cc,subject,body);
+  await buildStatementFiles();
+  window.location.href=mailto;
   showMsg('Correo preparado con la copia configurada. Revisa la cuenta remitente y el archivo adjunto.');
  }catch(err){alert(err.message);}finally{setBusy(btn,false);}
 });

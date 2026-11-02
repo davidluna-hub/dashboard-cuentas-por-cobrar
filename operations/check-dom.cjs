@@ -82,7 +82,7 @@ const financial=run('JSON.stringify({customers,invoices,payments,receipts,localP
  assert.equal(run('buildHoldReview().find(r=>r.customer.id==="c2").automatic'),false,'A later recorded response clears the previous no-response classification');
  run("collectionState.activities=[];customers=customers.filter(c=>c.id!=='c3');invoices=invoices.filter(i=>i.id!=='i3')");
  run("openClientStatement('c1')");assert(get('#clientStatementModal').classList.contains('open'),'Client statement opens before the notice action');downloads.length=0;await click('#emailCreditHoldNotice');assert(downloads.some(x=>x.name.endsWith('.png')),'Statement action downloads the PNG');assert(downloads.some(x=>x.name.endsWith('.pdf')),'Statement action downloads the PDF');assert(run('holdDraftUris.length')===2,'Statement action opens the preventive email directly');closeModals();
- assert.equal(run('holdNoticeMailto(["first@example.com","second@example.com"],["copy@example.com"],"A subject","Body")'),'mailto:first%40example.com,second%40example.com?cc=copy%40example.com&subject=A%20subject&body=Body','Mailto uses comma-separated recipients that email clients can parse');
+ assert.equal(run('holdNoticeMailto(["first@example.com","second@example.com"],["copy@example.com"],"A subject","Body")'),'mailto:first%40example.com%3Bsecond%40example.com?cc=copy%40example.com&subject=A%20subject&body=Body','Mailto keeps recipients separate in Outlook without requiring the optional comma setting');
  // Regression: a tab left open overnight must accept the new local date.
  const currentLocalDate=run('today()');
  const invoiceField=get('#invDate'),paymentField=get('#payDate');

@@ -74,10 +74,17 @@ function holdNoticeFacts(id){
  const body='Estimado equipo de cuentas por pagar de '+row.customer.legal_name+':\n\n'+lead+'\n\n'+details+'\n\n'+balances+'\n\n'+(nearLimit?'El uso de crédito desde 80% se incluye como señal preventiva; por sí solo no significa que se haya excedido el límite.\n\n':'')+'Les solicitamos atender el saldo y responder a este correo indicando la fecha de pago o cualquier aclaración. Si el pago ya fue realizado, favor de compartir el comprobante para actualizar la conciliación.\n\nAtentamente,\nAMAO Servicio y Comercio, S.A. de C.V.';
  return {row,account,state,status,subject,body,reasons,to:ArBillingCore.recipients(row.customer,reminderCustomers[id]||{}),cc:opsCompany().copy_email||''};
 }
-function holdNoticeMailto(to,cc,subject,body){
+function billingMailto(to,cc,subject,body){
+ const normalize=values=>ArBillingCore.recipients({email:(Array.isArray(values)?values:[values]).join(';')});
+ const recipients=normalize(to),copies=normalize(cc).filter(address=>!recipients.includes(address));
+ if(!recipients.length)throw new Error('Este cliente no tiene un correo válido registrado. Actualiza sus contactos antes de preparar el correo.');
+ // Outlook desktop requires semicolons when its optional comma separator setting is off.
  const fields=[['subject',subject],['body',body]];
- if(cc.length)fields.unshift(['cc',cc.join(',')]);
- return 'mailto:'+to.map(encodeURIComponent).join(',')+'?'+fields.map(([key,value])=>key+'='+encodeURIComponent(value)).join('&');
+ if(copies.length)fields.unshift(['cc',copies.join(';')]);
+ return 'mailto:'+encodeURIComponent(recipients.join(';'))+'?'+fields.map(([key,value])=>key+'='+encodeURIComponent(value)).join('&');
+}
+function holdNoticeMailto(to,cc,subject,body){
+ return billingMailto(to,cc,subject,body);
 }
 function openHoldNoticeMailDraft(mailto){window.location.href=mailto;}
 async function prepareHoldNoticeEmail(id,button){
