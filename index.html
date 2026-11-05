@@ -2802,6 +2802,24 @@ opsHandleAction=async function(action,value,button){
 };
 
 
+
+function setupDetallePagos(){
+const box=document.createElement('section');box.className='panel';box.innerHTML='<h2>Exportar pagos a detalle</h2><p class="sub">Elige fechas de ingreso y negocio. Los saldos sin aplicar aparecen en todos los negocios.</p><div class="toolbar" style="display:flex;flex-wrap:wrap;align-items:end;gap:12px"><div class="form-field"><label for="pdesde">Desde</label><input id="pdesde" class="field" type="date"></div><div class="form-field"><label for="phasta">Hasta</label><input id="phasta" class="field" type="date"></div><div class="form-field"><label for="pnegocio">Negocio</label><select id="pnegocio" class="field"><option value="all">Todos los negocios</option><option>Cartón</option><option>Foam</option><option>Otro</option></select></div><button class="green-btn" type="button" id="pdescargar">Exportar CSV</button></div><p class="meta">Cada importe corresponde a una factura o a un saldo sin aplicar. Filtra por moneda antes de sumar.</p>';
+$('view-payments').querySelector('.payment-workspace').before(box);
+$('pdescargar').addEventListener('click',()=>{
+const from=$('pdesde').value,to=$('phasta').value,filter=$('pnegocio').value;
+if(!from||!to||from>to){showMsg('Selecciona una fecha inicial y final válidas.','error');return;}
+const inside=d=>d&&String(d).slice(0,10)>=from&&String(d).slice(0,10)<=to, inv=new Map(invoices.map(i=>[i.id,i])), groups=new Map(), rows=[];
+for(const p of payments){if(p.receipt_id){const list=groups.get(p.receipt_id)||[];list.push(p);groups.set(p.receipt_id,list);}}
+const add=(r,p,value,kind)=>{const i=p?inv.get(p.invoice_id):null,line=i?businessName(i):'Sin asignar';if(filter!=='all'&&line!==filter)return;rows.push([r.payment_date||'',p?.payment_date||'',customerName(r.customer_id||i?.customer_id),line,i?.invoice_number||'Sin aplicar',r.currency||p?.currency||i?.currency||'',kind,r.payment_method||p?.payment_method||'',r.reference||p?.reference||'',value,r.notes||'',r.id||'',p?.id||'']);};
+for(const r of receipts){if(!inside(r.payment_date))continue;const list=groups.get(r.id)||[];for(const p of list)add(r,p,p.amount,p.credit_batch_id?'Saldo a favor aplicado':'Pago aplicado');const left=Math.max(0,cents(r.amount)-list.reduce((n,p)=>n+cents(p.amount),0));if(left)add(r,null,amount(left),'Saldo sin aplicar');}
+for(const p of payments)if(!p.receipt_id&&!p.credit_batch_id&&inside(p.payment_date))add(p,p,p.amount,'Pago histórico');
+rows.sort((a,b)=>String(b[0]).localeCompare(String(a[0]))||String(a[2]).localeCompare(String(b[2])));
+if(!rows.length){showMsg('No hay pagos para los filtros seleccionados.','error');return;}
+downloadCSV('pagos-detallados_'+from+'_'+to+'.csv',[['Fecha de ingreso','Fecha de aplicación','Cliente','Negocio','Factura','Moneda','Detalle','Método','Referencia','Importe','Notas','ID ingreso','ID aplicación'],...rows]);showMsg('Se exportaron '+rows.length+' registros de pagos.','success');
+});}
+setupDetallePagos();
+
 init();
 
 </script>
