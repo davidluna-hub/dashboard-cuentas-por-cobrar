@@ -893,8 +893,7 @@ function movementSelect(label,name,options,value,disabled=false){return '<div cl
 function showMovementEditor(title){$('detailModal').classList.remove('open');$('movementEditTitle').textContent=title;$('movementEditError').textContent='';$('movementEditModal').classList.add('open');$('movementEditModal').setAttribute('aria-hidden','false');}
 function closeMovementEditor(){if(movementSaving)return;$('movementEditModal').classList.remove('open');$('movementEditModal').setAttribute('aria-hidden','true');movementDraft=null;}
 function openReceiptEditor(id){
- const r=receipts.find(r=>r.id===id);if(!r)return;
- $('paymentsTable').innerHTML+=opsCashPager(cash.length);const applications=payments.filter(p=>p.receipt_id===id);
+ const r=receipts.find(r=>r.id===id);if(!r)return;const applications=payments.filter(p=>p.receipt_id===id);
  movementDraft={kind:'receipt',original:JSON.parse(JSON.stringify(r)),rows:applications.map(p=>({...p}))};
  const locked=applications.length>0;
  $('movementEditContent').innerHTML='<p class="meta">Corrige el ingreso y sus aplicaciones. El saldo a favor y las facturas pendientes se recalculan al guardar. Este registro se conserva en este navegador.</p><div class="form-grid">'+
@@ -1016,8 +1015,7 @@ function restoreArchiveState(b){receipts=b.receipts;plans=b.plans;promises=b.pro
 async function archiveRecord(kind,id){
  const backup=archiveState(),at=new Date().toISOString();
  if(kind==='receipt'){
- const r=receipts.find(r=>r.id===id);if(!r)return;
- $('paymentsTable').innerHTML+=opsCashPager(cash.length);const applications=payments.filter(p=>p.receipt_id===id);
+ const r=receipts.find(r=>r.id===id);if(!r)return;const applications=payments.filter(p=>p.receipt_id===id);
  if(applications.some(p=>!localPayments.some(x=>x.id===p.id)))throw new Error('El pago contiene aplicaciones del servidor; corrígelas antes de eliminar este ingreso.');
  archivedMovements=[...archivedMovements,{id:uuid(),kind,at,label:customerName(r.customer_id)+' · '+money(r.amount,r.currency),receipt:r,applications:localPayments.filter(p=>p.receipt_id===id)}];
  receipts=receipts.filter(r=>r.id!==id);localPayments=localPayments.filter(p=>p.receipt_id!==id);
