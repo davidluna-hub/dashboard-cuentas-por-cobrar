@@ -23,7 +23,7 @@
    add(r,null,left,'Anticipos sin aplicar','Saldo recibido sin aplicar','receipt:'+id);
   }
   for(const p of applications){
-   if(p.receipt_id||p.credit_batch_id){const id=p.receipt_id||p.credit_batch_id;if(!cashMap.has(id)&&inside(p.payment_date))warnings.push('Aplicación sin ingreso original disponible: '+(p.id||id));continue;}
+    if(p.receipt_id||p.credit_batch_id){const id=p.receipt_id||p.credit_batch_id;if(!p.source_invoice_id&&!cashMap.has(id)&&inside(p.payment_date))warnings.push('Aplicación sin ingreso original disponible: '+(p.id||id));continue;}
    if(!inside(p.payment_date))continue;
    const invoice=byInvoice.get(p.invoice_id),currency=p.currency||invoice?.currency;
    if(!['MXN','USD'].includes(currency)){warnings.push('Pago histórico sin moneda válida: '+(p.id||''));continue;}

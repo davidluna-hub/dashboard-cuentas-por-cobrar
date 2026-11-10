@@ -19,7 +19,7 @@
  function buildLedger(customers,invoices,basePayments,state={},onDate=localDay()){
   const merged=new Map();for(const p of [...basePayments,...(state.localPayments||[])])if(p.id)merged.set(p.id,p);
   const payments=[...merged.values()],paid=new Map(),credited=new Map(),byId=new Map(invoices.map(i=>[i.id,i])),lastPayment=new Map();
-  for(const p of payments)paid.set(p.invoice_id,(paid.get(p.invoice_id)||0)+Math.max(0,cents(p.amount)));
+  for(const p of payments){paid.set(p.invoice_id,(paid.get(p.invoice_id)||0)+Math.max(0,cents(p.amount)));if(p.source_invoice_id)paid.set(p.source_invoice_id,(paid.get(p.source_invoice_id)||0)-Math.max(0,cents(p.amount)));}
   for(const p of payments)if(cents(p.amount)>0&&p.payment_date&&p.payment_date>(lastPayment.get(p.invoice_id)||''))lastPayment.set(p.invoice_id,p.payment_date);
   for(const n of state.creditNotes||[])if(!n.cancelled_at)for(const a of n.allocations||[])credited.set(a.invoice_id,(credited.get(a.invoice_id)||0)+Math.max(0,cents(a.amount)));
   const terms=id=>(state.creditSettings||[]).find(x=>x.customer_id===id)||{credit_days:30,limit_mxn:null,limit_usd:null};
@@ -31,8 +31,8 @@
    const all=rows.filter(i=>i.customer_id===customer.id),open=all.filter(i=>i.balance>0).sort((a,b)=>String(a.due_date).localeCompare(String(b.due_date))||String(a.invoice_number).localeCompare(String(b.invoice_number))),setting=terms(customer.id);
    const currencies=['MXN','USD'].map(currency=>{
     const r=all.filter(i=>i.currency===currency),cash=(state.receipts||[]).filter(x=>x.customer_id===customer.id&&x.currency===currency),applied=payments.filter(p=>byId.get(p.invoice_id)?.customer_id===customer.id&&(p.currency||byId.get(p.invoice_id)?.currency)===currency),debt=centsSum(r,'balance'),rawLimit=setting[currency==='MXN'?'limit_mxn':'limit_usd'],limit=rawLimit===null||rawLimit===undefined||rawLimit===''?null:Number(rawLimit);
-    const legacy=applied.filter(p=>!p.receipt_id),credit=cash.reduce((n,x)=>n+Math.max(0,cents(x.amount)-payments.filter(p=>p.receipt_id===x.id).reduce((v,p)=>v+cents(p.amount),0)),0);
-    return {currency,debt:amount(debt),overdue:amount(centsSum(r.filter(i=>i.late>0),'balance')),received:amount(centsSum(cash,'amount')+centsSum(legacy,'amount')),applied:amount(centsSum(applied,'amount')),credit:amount(credit),limit,excess:limit===null?0:amount(Math.max(0,debt-cents(limit))),maxLate:Math.max(0,...r.filter(i=>i.balance>0).map(i=>i.late)),last_received_date:[...cash,...legacy].map(p=>p.payment_date||'').sort().at(-1)||null};
+    const legacy=applied.filter(p=>!p.receipt_id),credit=cash.reduce((n,x)=>n+Math.max(0,cents(x.amount)-payments.filter(p=>p.receipt_id===x.id).reduce((v,p)=>v+cents(p.amount),0)),0)+r.reduce((n,i)=>n+Math.max(0,cents(i.paid)-Math.max(0,cents(i.total)-cents(i.credited))),0);
+    return {currency,debt:amount(debt),overdue:amount(centsSum(r.filter(i=>i.late>0),'balance')),received:amount(centsSum(cash,'amount')+centsSum(legacy,'amount')),applied:amount(r.reduce((n,i)=>n+cents(i.paid),0)),credit:amount(credit),limit,excess:limit===null?0:amount(Math.max(0,debt-cents(limit))),maxLate:Math.max(0,...r.filter(i=>i.balance>0).map(i=>i.late)),last_received_date:[...cash,...legacy].map(p=>p.payment_date||'').sort().at(-1)||null};
    }).filter(a=>a.debt>0||a.received>0||a.applied>0||a.credit>0);
    return {customer,terms:setting,all,open,currencies,onDate,commitments:statementCommitments(customer.id,open,state,onDate)};
   });
