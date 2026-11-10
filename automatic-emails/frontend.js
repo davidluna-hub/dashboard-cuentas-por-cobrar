@@ -43,6 +43,37 @@ async function setReminderServiceEnabled(enabled){
 $('dashboardReminderToggle').addEventListener('click',()=>setReminderServiceEnabled(!reminderCloud.enabled));
 $('dashboardReminderConfigure').addEventListener('click',()=>{go('customers');$('reminderSettingsPanel').open=true;$('reminderSettingsPanel').scrollIntoView({behavior:'smooth',block:'start'});});
 function currentBillingPayload(){return {receipts,creditSettings:customers.map(c=>({...termsFor(c.id)})),plans,promises,localPayments,archivedMovements,creditNotes,invoiceCancellations,holdPreferences,reminderSettings,reminderCustomers};}
+// Keep the database's cash and invoice limits intact. A reduced invoice frees
+// part of its existing application; the previous amount remains in its audit.
+function reconcileInvoiceAllocations(payload,invoiceRows,serverPayments,stamp=new Date().toISOString()){
+ const receiptRows=(payload.receipts||[]).map(r=>({...r})),receiptIds=new Set(receiptRows.map(r=>r.id)),local=(payload.localPayments||[]).map(p=>({...p})),notes=payload.creditNotes||[];
+ const localIds=new Set(local.map(p=>p.id)),server=serverPayments.filter(p=>!localIds.has(p.id)),changes=[],removed=[];
+ for(const invoice of invoiceRows){
+  const billed=cents(invoice.total),credited=notes.filter(n=>!n.cancelled_at).flatMap(n=>n.allocations||[]).filter(a=>a.invoice_id===invoice.id).reduce((n,a)=>n+cents(a.amount),0);
+  const received=server.filter(p=>p.invoice_id===invoice.id).reduce((n,p)=>n+cents(p.amount),0);
+  const linked=local.filter(p=>p.invoice_id===invoice.id).sort((a,b)=>String(b.payment_date||'').localeCompare(String(a.payment_date||''))||String(b.ar_recorded_at||'').localeCompare(String(a.ar_recorded_at||''))||String(b.id||'').localeCompare(String(a.id||'')));
+  let excess=received+linked.reduce((n,p)=>n+cents(p.amount),0)+credited-billed;
+  if(excess<=0)continue;
+  if(credited>billed||linked.filter(p=>receiptIds.has(p.receipt_id)).reduce((n,p)=>n+cents(p.amount),0)<excess)throw Error('La factura '+invoice.invoice_number+' tiene un excedente que no se puede devolver a un ingreso registrado. Conservamos la copia local para revisión.');
+  const freed=new Map();
+  for(const p of linked){
+   if(!excess)break;
+   if(!receiptIds.has(p.receipt_id))continue;
+   const before=cents(p.amount),take=Math.min(before,excess);if(!take)continue;
+   p.amount=amount(before-take);excess-=take;freed.set(p.receipt_id,(freed.get(p.receipt_id)||0)+take);
+   const change={at:stamp,reason:'invoice_total_reduced',invoice_id:invoice.id,invoice_number:invoice.invoice_number,before_amount:amount(before),after_amount:p.amount,released:amount(take)};
+   if(p.amount>0)p.adjustment_history=[...(p.adjustment_history||[]),change];else{removed.push(p.id);const r=receiptRows.find(r=>r.id===p.receipt_id);if(r)r.application_adjustments=[...(r.application_adjustments||[]),{...change,application_id:p.id}];}
+   changes.push({...change,receipt_id:p.receipt_id});
+  }
+  for(const p of local.filter(p=>p.source_invoice_id===invoice.id)){
+   const available=freed.get(p.receipt_id)||0;
+   if(available<cents(p.amount))throw Error('El traslado de la factura '+invoice.invoice_number+' no coincide con el ingreso que financió el saldo. Se conserva la copia local.');
+   freed.set(p.receipt_id,available-cents(p.amount));delete p.source_invoice_id;
+  }
+ }
+ if(!changes.length)return {payload,changes};
+ return {payload:{...payload,localPayments:local.filter(p=>!removed.includes(p.id)),receipts:receiptRows},changes};
+}
 function clientStatementAccount(id){return ArBillingCore.buildLedger(customers,invoices,payments,currentBillingPayload(),today()).find(a=>a.customer.id===id);}
 function openClientStatement(id){
  const account=clientStatementAccount(id);if(!account)return;
@@ -104,7 +135,7 @@ async function prepareHoldNoticeEmail(id,button){
 }
 $('emailCreditHoldNotice').addEventListener('click',e=>prepareHoldNoticeEmail($('clientStatementModal').dataset.customerId,e.currentTarget));
 
-async function reminderCloudLoad(local){
+async function reminderCloudLoad(local,serverPayments=[]){
  reminderServiceFeedback='';
  while(reminderCloud.ready&&(reminderCloud.busy||reminderCloud.queued))await flushReminderCloud();
  reminderCloud={...reminderCloud,ready:false,synced:false,error:'Servicio pendiente de conexión'};
@@ -112,12 +143,16 @@ async function reminderCloudLoad(local){
  try{const {data,error}=await sb.rpc('ar_read_reminder_workspace');if(error)throw error;
   reminderCloud={...reminderCloud,ready:true,version:data.version,enabled:data.enabled,hour:data.send_hour,zone:data.timezone,synced:data.version>0,error:''};
   if(!data.payload||!Object.keys(data.payload).length)return local;
-  const key=localFeatureKey()+'_cloud_pending',pending=JSON.parse(localStorage.getItem(key)||'null');
-  if(pending){if(JSON.stringify(pending.payload)===JSON.stringify(data.payload)){localStorage.removeItem(key);localStorage.setItem(localFeatureKey(),JSON.stringify(data.payload));return data.payload;}if(pending.base_version===data.version){const result=await sb.rpc('ar_write_reminder_workspace',{expected_version:data.version,next_payload:pending.payload});if(result.error)throw result.error;reminderCloud.version=result.data.version;localStorage.removeItem(key);return pending.payload;}
-   localStorage.setItem(localFeatureKey()+'_conflict_backup',JSON.stringify(local));reminderCloud.error='Hay cambios locales sin sincronizar y cambios de otro usuario. Se conservó una copia local; revisa antes de activar avisos.';reminderCloud.synced=false;return data.payload;
-  }
+   const key=localFeatureKey()+'_cloud_pending',pending=JSON.parse(localStorage.getItem(key)||'null');
+   const expected=pending?.base_version??data.version,reconciled=reconcileInvoiceAllocations(pending?.payload||data.payload,invoices,serverPayments),candidate=reconciled.payload;
+   if(reconciled.changes.length){localStorage.setItem(localFeatureKey(),JSON.stringify(candidate));localStorage.setItem(key,JSON.stringify({base_version:expected,payload:candidate}));}
+   if(pending||reconciled.changes.length){
+    if(JSON.stringify(candidate)===JSON.stringify(data.payload)){localStorage.removeItem(key);localStorage.setItem(localFeatureKey(),JSON.stringify(data.payload));return data.payload;}
+    if(expected===data.version){const result=await sb.rpc('ar_write_reminder_workspace',{expected_version:data.version,next_payload:candidate});if(result.error)throw result.error;reminderCloud.version=result.data.version;localStorage.removeItem(key);localStorage.setItem(localFeatureKey(),JSON.stringify(candidate));return candidate;}
+    localStorage.setItem(localFeatureKey()+'_conflict_backup',JSON.stringify(localFeatureData()));reminderCloud.error='Hay cambios locales sin sincronizar y cambios de otro usuario. Se conservó una copia local; revisa antes de activar avisos.';reminderCloud.synced=false;return data.payload;
+   }
   localStorage.setItem(localFeatureKey(),JSON.stringify(data.payload));return data.payload;
- }catch(e){reminderCloud.error=/PGRST202|42883/.test(e.code||'')?'Falta instalar el servicio en Supabase.':e.message||'No se pudo conectar la sincronización.';return local;}
+  }catch(e){reminderCloud.synced=false;reminderCloud.error=/PGRST202|42883/.test(e.code||'')?'Falta instalar el servicio en Supabase.':e.message||'No se pudo conectar la sincronización.';return localFeatureData();}
 }
 function queueReminderCloudSave(){
  if(!reminderCloud.ready)return;

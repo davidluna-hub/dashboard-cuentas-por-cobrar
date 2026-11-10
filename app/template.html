@@ -300,7 +300,15 @@ const localFeatureKey=()=>`amao_cobranza_local_v1_${activeUserId||'local'}`;
 function localFeatureData(){try{return JSON.parse(localStorage.getItem(localFeatureKey())||'{}')}catch{return {}}}
 let previousLocalPaymentIds=new Set();
 function syncAppliedPayments(){const localIds=new Set(localPayments.map(p=>p.id));payments=[...payments.filter(p=>!localIds.has(p.id)&&!previousLocalPaymentIds.has(p.id)),...localPayments];previousLocalPaymentIds=localIds;}
-function saveLocalFeatureData(){resetQuickSearchCache();localStorage.setItem(localFeatureKey(),JSON.stringify({receipts,creditSettings,plans,promises,localPayments,archivedMovements,creditNotes,invoiceCancellations,holdPreferences,reminderSettings,reminderCustomers}));syncAppliedPayments();queueReminderCloudSave();}
+function saveLocalFeatureData(){
+ resetQuickSearchCache();
+ const current={receipts,creditSettings,plans,promises,localPayments,archivedMovements,creditNotes,invoiceCancellations,holdPreferences,reminderSettings,reminderCustomers};
+ const server=payments.filter(p=>!localPayments.some(local=>local.id===p.id));
+ const reconciled=reconcileInvoiceAllocations(current,invoices,server);
+ localStorage.setItem(localFeatureKey(),JSON.stringify(reconciled.payload));
+ if(reconciled.changes.length){receipts=reconciled.payload.receipts;localPayments=reconciled.payload.localPayments;}
+ syncAppliedPayments();queueReminderCloudSave();
+}
 function applyLocalAllocations(receipt,allocations,credit=false){
  const pending=[];
   const ledger=credit?ArBillingCore.creditSourceLedger(invoices,payments,receipts,creditNotes,receipt.payment_date):null;
@@ -481,7 +489,7 @@ async function loadData(){
     ]);
     [customers,invoices]=base;
     customers.sort((a,b)=>a.legal_name.localeCompare(b.legal_name));
-    const local=await reminderCloudLoad(localFeatureData());
+    const local=await reminderCloudLoad(localFeatureData(),base[2]);
     receipts=Array.isArray(local.receipts)?local.receipts:[];
     creditSettings=Array.isArray(local.creditSettings)?local.creditSettings:[];holdPreferences=normalizeHoldPreferences(local.holdPreferences);reminderSettings=local.reminderSettings||{due_days:7,hold_lead_days:7};reminderCustomers=local.reminderCustomers||{};
     plans=Array.isArray(local.plans)?local.plans:[];
@@ -578,9 +586,11 @@ function openReceipt(id){
  const r=receipts.find(r=>r.id===id);if(!r)return;
  const applied=payments.filter(p=>p.receipt_id===id).sort((a,b)=>a.payment_date.localeCompare(b.payment_date));
  const ledger=ArBillingCore.creditSourceLedger(invoices,payments,receipts,creditNotes),released=ledger.invoiceReceipts.get(id)||[];
+ const audit=[...applied.flatMap(p=>p.adjustment_history||[]),...(r.application_adjustments||[])].filter(x=>x.reason==='invoice_total_reduced');
+ const auditHTML=audit.map(x=>`<div class="notice success">Factura ${esc(x.invoice_number)}: aplicación corregida de ${money(x.before_amount,r.currency)} a ${money(x.after_amount,r.currency)}; ${money(x.released,r.currency)} liberados al saldo a favor.</div>`).join('');
  const rows=applied.map(p=>`<tr><td>${date(p.payment_date)}</td><td>${esc(invoices.find(i=>i.id===p.invoice_id)?.invoice_number||'-')}</td><td>${esc(p.credit_batch_id?'Aplicación posterior de saldo a favor':'Pago aplicado al recibir')}</td><td>${money(p.amount,p.currency)}</td></tr>`);
  for(const a of released)rows.push(`<tr><td>${date(a.date)}</td><td>${esc(a.invoice.invoice_number)}</td><td>Corrección del total · aplicación liberada al saldo a favor</td><td class="green">−${money(amount(a.amount),r.currency)}</td></tr>`);
- modal('Detalle del pago recibido',`<div class="account-banner"><div><h3>${esc(customerName(r.customer_id))}</h3><div>Recibido ${date(r.payment_date)} · ${esc(r.reference||'Sin referencia')}</div></div><b>${money(r.amount,r.currency)}</b></div><p>Saldo a favor todavía disponible: <b class="green">${money(receiptRemaining(r,null,ledger),r.currency)}</b></p><div class="table-wrap">${table(rows,['Fecha de aplicación','Factura','Movimiento','Importe'])}</div>`);
+ modal('Detalle del pago recibido',`<div class="account-banner"><div><h3>${esc(customerName(r.customer_id))}</h3><div>Recibido ${date(r.payment_date)} · ${esc(r.reference||'Sin referencia')}</div></div><b>${money(r.amount,r.currency)}</b></div><p>Saldo a favor todavía disponible: <b class="green">${money(receiptRemaining(r,null,ledger),r.currency)}</b></p>${auditHTML}<div class="table-wrap">${table(rows,['Fecha de aplicación','Factura','Movimiento','Importe'])}</div>`);
 }
 
 
@@ -809,7 +819,7 @@ function openInvoiceEditor(id){
  const linked=invoiceCreditCents(id)>0||payments.some(p=>p.invoice_id===id)||promises.some(p=>p.invoice_id===id)||plans.some(p=>p.invoice_id===id);
  const sources=['manual','excel','sistema_externo'];
  $('invoiceEditFields').innerHTML=`<div class="form-field"><label for="editInvoiceCustomer">Cliente</label><select class="field" id="editInvoiceCustomer" name="customer" required ${linked?'disabled':''}>${customers.map(c=>`<option value="${esc(c.id)}" ${c.id===i.customer_id?'selected':''}>${esc(c.legal_name)}</option>`).join('')}</select></div><div class="form-field"><label for="editInvoiceNumber">Número de factura</label><input class="field" id="editInvoiceNumber" name="number" required value="${esc(i.invoice_number)}"></div><div class="form-field"><label for="editInvoiceDate">Fecha de factura</label><input class="field" id="editInvoiceDate" name="invoiceDate" type="date" max="${today()}" required value="${esc(i.invoice_date)}"></div><div class="form-field"><label for="editInvoiceDue">Vencimiento</label><input class="field" id="editInvoiceDue" name="dueDate" type="date" required value="${esc(invoiceDueDate(i)||'')}"></div><div class="form-field"><label for="editInvoiceCurrency">Moneda</label><select class="field" id="editInvoiceCurrency" name="currency" ${linked?'disabled':''}>${['MXN','USD'].map(c=>`<option ${c===i.currency?'selected':''}>${c}</option>`).join('')}</select></div><div class="form-field"><label for="editInvoiceBusiness">Negocio</label><select class="field" id="editInvoiceBusiness" name="business" required>${['Cartón','Foam','Otro'].map(b=>`<option ${b===businessName(i)?'selected':''}>${b}</option>`).join('')}</select></div><div class="form-field"><label for="editInvoiceTotal">Total de la factura</label><input class="field" id="editInvoiceTotal" name="total" type="number" min=".01" step=".01" required value="${Number(i.total)}"></div><div class="form-field"><label for="editInvoiceSource">Origen</label><select class="field" id="editInvoiceSource" name="source">${sources.map(x=>`<option value="${esc(x)}" ${x===i.source?'selected':''}>${esc(x)}</option>`).join('')}</select></div><div class="form-field"><label for="editInvoiceReference">Referencia externa</label><input class="field" id="editInvoiceReference" name="reference" value="${esc(i.external_reference||'')}"></div><div class="form-field full"><label for="editInvoiceNotes">Notas</label><textarea class="field" id="editInvoiceNotes" name="notes">${esc(i.notes||'')}</textarea></div>`;
- $('invoiceEditInfo').textContent=linked?'Cliente y moneda se conservan porque hay pagos o compromisos asociados. Los pagos no se modificarán; cualquier excedente quedará disponible para otras facturas del mismo cliente y moneda.':'Corrige los datos y revisa el total antes de guardar. La fecha de vencimiento es editable.';
+ $('invoiceEditInfo').textContent=linked?'Cliente y moneda se conservan porque hay pagos o compromisos asociados. Si bajas el total, se ajusta la aplicación del ingreso y el excedente queda disponible para otras facturas del mismo cliente y moneda. El importe anterior queda en el historial.':'Corrige los datos y revisa el total antes de guardar. La fecha de vencimiento es editable.';
  $('invoiceEditErrors').textContent='';$('invoiceEditModal').classList.add('open');$('invoiceEditModal').setAttribute('aria-hidden','false');updateInvoiceEditPreview();$('editInvoiceNumber').focus();
 }
 function closeInvoiceEditor(){
@@ -828,7 +838,7 @@ async function persistInvoiceEdit(original,data){
  const {data:saved,error}=await saveInvoiceWithBusinessLine(data,record=>{let query=sb.from('invoices').update(record).eq('id',original.id);if(current.updated_at)query=query.eq('updated_at',current.updated_at);return query.select('*').single();},current.business_line);
  if(error)throw error;
  if(!saved?.id)throw new Error('No se confirmó el cambio. Revisa tus permisos de edición en Supabase.');
- invoices=invoices.map(i=>i.id===saved.id?saved:i);payments=combined;return saved;
+  invoices=invoices.map(i=>i.id===saved.id?saved:i);payments=combined;saveLocalFeatureData();return saved;
 }
 document.addEventListener('click',e=>{
  const b=e.target.closest('button');if(!b)return;
@@ -844,7 +854,7 @@ $('invoiceEditForm').addEventListener('submit',async e=>{
  const data=editInvoiceData(e.currentTarget),errors=validateInvoiceEdit(editingInvoiceSnapshot,data);
  if(errors.length){$('invoiceEditErrors').textContent=errors.join(' ');return;}
  invoiceEditSaving=true;const button=$('saveInvoiceEdit');setBusy(button,true);
- try{await persistInvoiceEdit(editingInvoiceSnapshot,data);invoiceEditSaving=false;closeInvoiceEditor();renderAll();showMsg('Factura actualizada. Los pagos se conservaron; el excedente quedó como saldo a favor o la diferencia como adeudo, según corresponda.','success');}
+ try{await persistInvoiceEdit(editingInvoiceSnapshot,data);invoiceEditSaving=false;closeInvoiceEditor();renderAll();showMsg('Factura actualizada. El ingreso se conserva; la aplicación se ajustó al total y el excedente quedó disponible, o la diferencia como adeudo, según corresponda.','success');}
  catch(err){$('invoiceEditErrors').textContent='No se guardó la factura: '+(err.message||err);}
  finally{invoiceEditSaving=false;setBusy(button,false);}
 });
