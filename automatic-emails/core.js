@@ -16,13 +16,50 @@
   const to=[...new Set(addresses.map(a=>String(a||'').trim().toLowerCase()).filter(Boolean))];
   return {from:sender||mailDefaults.sender,to,cc:copy&&!to.includes(copy.toLowerCase())?[copy]:[]};
  }
+ // Attribute an invoice's excess to the actual receipt that funded it. Keep the
+ // original application for the audit trail; only its effective allocation changes.
+ function creditSourceLedger(invoices,payments,receipts,creditNotes=[],onDate=null){
+  const receiptIds=new Set(receipts.map(r=>r.id)),byInvoice=new Map(),paid=new Map(),invoiceTransfers=new Map(),credited=new Map(),byReceipt=new Map(),virtualByInvoice=new Map(),invoiceReceipts=new Map();
+  for(const p of payments){
+   if(p.invoice_id){paid.set(p.invoice_id,(paid.get(p.invoice_id)||0)+cents(p.amount));const entries=byInvoice.get(p.invoice_id)||[];entries.push(p);byInvoice.set(p.invoice_id,entries);}
+   if(p.source_invoice_id&&!receiptIds.has(p.receipt_id))invoiceTransfers.set(p.source_invoice_id,(invoiceTransfers.get(p.source_invoice_id)||0)+cents(p.amount));
+  }
+  for(const n of creditNotes)if(!n.cancelled_at)for(const a of n.allocations||[])credited.set(a.invoice_id,(credited.get(a.invoice_id)||0)+cents(a.amount));
+  for(const i of invoices){
+   if(i.status==='cancelada')continue;
+   let left=Math.max(0,(paid.get(i.id)||0)-Math.max(0,cents(i.total)-(credited.get(i.id)||0)));
+   if(!left)continue;
+   const entries=byInvoice.get(i.id)||[],releaseDate=[i.updated_at?localDay(new Date(i.updated_at)):i.invoice_date,...entries.map(p=>p.payment_date)].filter(Boolean).sort().at(-1);
+   if(onDate&&releaseDate>onDate)continue;
+   for(const p of entries.filter(p=>receiptIds.has(p.receipt_id)).sort((a,b)=>String(b.payment_date||'').localeCompare(String(a.payment_date||''))||String(b.ar_recorded_at||'').localeCompare(String(a.ar_recorded_at||''))||String(b.id||'').localeCompare(String(a.id||'')))){
+    const value=Math.min(left,Math.max(0,cents(p.amount)));if(!value)continue;
+    byReceipt.set(p.receipt_id,(byReceipt.get(p.receipt_id)||0)+value);
+    const assigned=invoiceReceipts.get(p.receipt_id)||[];assigned.push({invoice:i,amount:value,date:releaseDate});invoiceReceipts.set(p.receipt_id,assigned);
+    left-=value;if(!left)break;
+   }
+   // Older invoice-sourced transfers have no real receipt id. Consume their
+   // virtual credit first, then the released portion of the original receipt.
+   let transfer=invoiceTransfers.get(i.id)||0;
+   const fromVirtual=Math.min(left,transfer);left-=fromVirtual;transfer-=fromVirtual;
+   if(transfer)for(const p of entries.filter(p=>receiptIds.has(p.receipt_id))){
+    const assigned=invoiceReceipts.get(p.receipt_id)||[];
+    for(const item of assigned.filter(a=>a.invoice.id===i.id)){
+     const take=Math.min(transfer,item.amount);item.amount-=take;byReceipt.set(p.receipt_id,(byReceipt.get(p.receipt_id)||0)-take);transfer-=take;if(!transfer)break;
+    }
+    if(!transfer)break;
+   }
+   if(left)virtualByInvoice.set(i.id,left);
+  }
+  return {byReceipt,virtualByInvoice,invoiceReceipts};
+ }
  function buildLedger(customers,invoices,basePayments,state={},onDate=localDay()){
   const merged=new Map();for(const p of [...basePayments,...(state.localPayments||[])])if(p.id)merged.set(p.id,p);
   const payments=[...merged.values()],paid=new Map(),credited=new Map(),byId=new Map(invoices.map(i=>[i.id,i])),lastPayment=new Map();
   for(const p of payments){paid.set(p.invoice_id,(paid.get(p.invoice_id)||0)+Math.max(0,cents(p.amount)));if(p.source_invoice_id)paid.set(p.source_invoice_id,(paid.get(p.source_invoice_id)||0)-Math.max(0,cents(p.amount)));}
   for(const p of payments)if(cents(p.amount)>0&&p.payment_date&&p.payment_date>(lastPayment.get(p.invoice_id)||''))lastPayment.set(p.invoice_id,p.payment_date);
   for(const n of state.creditNotes||[])if(!n.cancelled_at)for(const a of n.allocations||[])credited.set(a.invoice_id,(credited.get(a.invoice_id)||0)+Math.max(0,cents(a.amount)));
-  const terms=id=>(state.creditSettings||[]).find(x=>x.customer_id===id)||{credit_days:30,limit_mxn:null,limit_usd:null};
+   const sources=creditSourceLedger(invoices,payments,state.receipts||[],state.creditNotes||[],onDate);
+   const terms=id=>(state.creditSettings||[]).find(x=>x.customer_id===id)||{credit_days:30,limit_mxn:null,limit_usd:null};
   const rows=invoices.filter(i=>i.status!=='cancelada').map(i=>{
    const due=i.due_date||shift(i.invoice_date,Number(terms(i.customer_id).credit_days)||0),p=paid.get(i.id)||0,n=credited.get(i.id)||0;
    return {...i,due_date:due,paid:amount(p),credited:amount(n),balance:amount(Math.max(0,cents(i.total)-p-n)),late:Math.max(0,days(onDate,due)),last_payment_date:lastPayment.get(i.id)||null};
@@ -31,7 +68,7 @@
    const all=rows.filter(i=>i.customer_id===customer.id),open=all.filter(i=>i.balance>0).sort((a,b)=>String(a.due_date).localeCompare(String(b.due_date))||String(a.invoice_number).localeCompare(String(b.invoice_number))),setting=terms(customer.id);
    const currencies=['MXN','USD'].map(currency=>{
     const r=all.filter(i=>i.currency===currency),cash=(state.receipts||[]).filter(x=>x.customer_id===customer.id&&x.currency===currency),applied=payments.filter(p=>byId.get(p.invoice_id)?.customer_id===customer.id&&(p.currency||byId.get(p.invoice_id)?.currency)===currency),debt=centsSum(r,'balance'),rawLimit=setting[currency==='MXN'?'limit_mxn':'limit_usd'],limit=rawLimit===null||rawLimit===undefined||rawLimit===''?null:Number(rawLimit);
-    const legacy=applied.filter(p=>!p.receipt_id),credit=cash.reduce((n,x)=>n+Math.max(0,cents(x.amount)-payments.filter(p=>p.receipt_id===x.id).reduce((v,p)=>v+cents(p.amount),0)),0)+r.reduce((n,i)=>n+Math.max(0,cents(i.paid)-Math.max(0,cents(i.total)-cents(i.credited))),0);
+     const legacy=applied.filter(p=>!p.receipt_id),credit=cash.reduce((n,x)=>n+Math.max(0,cents(x.amount)-payments.filter(p=>p.receipt_id===x.id).reduce((v,p)=>v+cents(p.amount),0)+(sources.byReceipt.get(x.id)||0)),0)+r.reduce((n,i)=>n+(sources.virtualByInvoice.get(i.id)||0),0);
     return {currency,debt:amount(debt),overdue:amount(centsSum(r.filter(i=>i.late>0),'balance')),received:amount(centsSum(cash,'amount')+centsSum(legacy,'amount')),applied:amount(r.reduce((n,i)=>n+cents(i.paid),0)),credit:amount(credit),limit,excess:limit===null?0:amount(Math.max(0,debt-cents(limit))),maxLate:Math.max(0,...r.filter(i=>i.balance>0).map(i=>i.late)),last_received_date:[...cash,...legacy].map(p=>p.payment_date||'').sort().at(-1)||null};
    }).filter(a=>a.debt>0||a.received>0||a.applied>0||a.credit>0);
    return {customer,terms:setting,all,open,currencies,onDate,commitments:statementCommitments(customer.id,open,state,onDate)};
@@ -104,5 +141,5 @@ ${alertText?'<div class="statement-legend">'+escape(alertText)+'</div>':''}
   return html.slice(0,start)+'<div class="statement-section"><h3>Resumen de facturas pendientes · '+a.open.length+'</h3><table><thead><tr><th>Moneda</th><th>Facturas</th><th>Por vencer</th><th>1–30 días</th><th>31–60 días</th><th>Más de 60</th><th>Pendiente</th></tr></thead><tbody>'+rows+'</tbody></table><p class="statement-muted">Resumen ejecutivo. El detalle completo de folios, vencimientos y promesas permanece disponible en el estado de cuenta detallado.</p></div>'+html.slice(end)+(a.commitments?.length>4?'<p class="statement-muted">Se muestran los primeros 4 compromisos. Consulta el detalle para ver todos.</p>':'');
  }
 
- const api={statementBanks,statementExecutiveHTML,paymentFulfillsPromise,commitmentLedger,cents,amount,money,escape,days,shift,localDay,profile,recipients,mailDefaults,mailRouting,buildLedger,reminders,statementHTML,statementCurrencies,statementDate,statementDueInfo,statementInvoicePromise,businessLabel,bounded};root.ArBillingCore=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
+ const api={statementBanks,statementExecutiveHTML,paymentFulfillsPromise,commitmentLedger,cents,amount,money,escape,days,shift,localDay,profile,recipients,mailDefaults,mailRouting,creditSourceLedger,buildLedger,reminders,statementHTML,statementCurrencies,statementDate,statementDueInfo,statementInvoicePromise,businessLabel,bounded};root.ArBillingCore=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(globalThis);
