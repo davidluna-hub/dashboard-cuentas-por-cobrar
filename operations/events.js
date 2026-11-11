@@ -10,6 +10,7 @@ async function opsHandleAction(action,value,button){
  if(action==='tab')return openOperations(value);
  if(action==='sync')return opsReviewSync();
  if(action==='sync-backup')return downloadBlob(new Blob([JSON.stringify(opsConflict?.local||currentBillingPayload(),null,2)],{type:'application/json'}),'AMAO_cambios_pendientes_'+today()+'.json');
+ if(action==='invoice-report')return openOpsInvoiceReport(value||$('invoiceCustomerFilter')?.value||'');
  if(action==='client')return openCollectionClient(value);
  if(action==='activity')return openCollectionActivity(null,value);
  if(action==='statement')return openClientStatement(value);

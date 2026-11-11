@@ -15,6 +15,19 @@ function collections(data,start,end){
  const moves=[];for(let d=weekly.week(start).start;d<=end;d=weekly.shift(d,7))moves.push(...weekly.weeklyCollections(data,d).movements.filter(m=>m.received_date>=start&&m.received_date<=end));
  return {movements:moves,rows:['Cartón','Foam','Otro','Anticipos sin aplicar','Sin clasificar'].map(b=>({business:b,MXN:amount(moves.filter(m=>m.business===b&&m.currency==='MXN').reduce((n,m)=>n+cents(m.amount),0)),USD:amount(moves.filter(m=>m.business===b&&m.currency==='USD').reduce((n,m)=>n+cents(m.amount),0))})).filter(r=>['Cartón','Foam'].includes(r.business)||r.MXN||r.USD)};
 }
+function invoiceReport(data,{customer_id,start,end,currency='all',includeCancelled=false},onDate=billing.localDay()){
+ const validDay=value=>typeof value==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(value)&&Number.isFinite(Date.parse(value+'T12:00:00Z'))&&new Date(value+'T12:00:00Z').toISOString().slice(0,10)===value;
+ if(!validDay(start)||!validDay(end)||start>end)throw Error('Selecciona una fecha inicial y una fecha final válidas.');
+ const customer=data.customers.find(c=>c.id===customer_id);
+ if(!customer)throw Error('Selecciona un cliente para consultar sus facturas.');
+ if(!['all','MXN','USD'].includes(currency))throw Error('Selecciona una moneda válida.');
+ const currencies=['MXN','USD'].filter(c=>currency==='all'||c===currency),inside=i=>i.invoice_date>=start&&i.invoice_date<=end&&currencies.includes(i.currency);
+ const ledger=billing.buildLedger([customer],data.invoices,data.payments||[],data,onDate)[0];
+ const active=ledger.all.filter(inside),cancelled=data.invoices.filter(i=>i.customer_id===customer_id&&i.status==='cancelada'&&inside(i));
+ const rows=[...active,...(includeCancelled?cancelled.map(i=>({...i,paid:0,credited:0,balance:0})):[])].sort((a,b)=>String(a.invoice_date).localeCompare(String(b.invoice_date))||String(a.invoice_number).localeCompare(String(b.invoice_number),'es-MX',{numeric:true})||String(a.id).localeCompare(String(b.id)));
+ const totals=currencies.map(currency=>{const items=active.filter(i=>i.currency===currency),total={currency,count:items.length};for(const key of ['total','paid','credited','balance'])total[key]=amount(items.reduce((n,i)=>n+cents(i[key]),0));return total;});
+ return {customer,start,end,rows,totals,count:active.length,cancelledCount:cancelled.length};
+}
 function xlsx(headers,rows,sheet='Reporte'){
  const enc=new TextEncoder(),xml=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[c])).replace(/[\x00-\x08\x0b\x0c\x0e-\x1f]/g,''),col=n=>{let s='';for(n++;n;n=Math.floor((n-1)/26))s=String.fromCharCode(65+(n-1)%26)+s;return s;};
  const all=[headers,...rows],sheetXml='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" state="frozen"/></sheetView></sheetViews><cols>'+headers.map((_,n)=>'<col min="'+(n+1)+'" max="'+(n+1)+'" width="24" customWidth="1"/>').join('')+'</cols><sheetData>'+all.map((r,n)=>'<row r="'+(n+1)+'">'+r.map((v,k)=>{const ref=col(k)+(n+1);return typeof v==='number'&&Number.isFinite(v)?'<c r="'+ref+'" s="2"><v>'+v+'</v></c>':'<c r="'+ref+'" s="'+(n?0:1)+'" t="inlineStr"><is><t xml:space="preserve">'+xml(v)+'</t></is></c>';}).join('')+'</row>').join('')+'</sheetData><autoFilter ref="A1:'+col(headers.length-1)+all.length+'"/></worksheet>';
@@ -40,5 +53,5 @@ function mergeWorkspaces(base,local,remote,choices={}){
  return {payload:merge(base,local,remote,[]),conflicts};
 }
 
-const api={quality,collections,xlsx,mergeWorkspaces};root.ArOpsCore=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
+const api={quality,collections,invoiceReport,xlsx,mergeWorkspaces};root.ArOpsCore=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(globalThis);

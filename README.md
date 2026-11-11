@@ -6,6 +6,7 @@ Dashboard en https://davidluna-hub.github.io/dashboard-cuentas-por-cobrar/.
 
 - **Herramientas diarias → Mi día**: prioridades, compromisos atrasados, gestiones y revisiones de crédito.
 - **Reportes**: cobros por negocio, Credit Hold, promesas, seguimiento y resumen. Excel, texto e imágenes paginadas para WhatsApp. Los periodos filtran cobros y compromisos; los saldos se identifican como actuales.
+- **Facturas por cliente y fechas**: entra desde Facturas, la tarjeta del cliente o Herramientas diarias → Reportes. Elige cliente, Desde y Hasta para ver las facturas emitidas, incluidas las liquidadas. Ambos días están incluidos; el total del periodo completo se separa por moneda y las canceladas se pueden mostrar sin sumarlas. Excel y texto contienen todo el desglose; cada imagen incluye los totales completos. Los pagos, notas de crédito y saldos mostrados son los actuales.
 - **Calidad de datos**: fechas inconsistentes y contactos sin correo válido; no corrige registros automáticamente.
 - **Historial de cambios**: valores anteriores y nuevos; empieza con esta versión.
 - **Comprobantes**: archivos privados de hasta 10 MB relacionados con facturas, ingresos, notas y acuerdos.

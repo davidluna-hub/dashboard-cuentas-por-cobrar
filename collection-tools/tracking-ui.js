@@ -29,7 +29,7 @@ async function saveTrackingUpdate(event){
  }catch(error){if(draft.user===activeUserId)showMsg(error.message||'No se guardó el seguimiento.','error','trackingUpdateError');}finally{collectionSaving=false;setBusy(event.submitter,false);}
 }
 function createTrackingCanvas(model){
- const canvas=document.createElement('canvas'),width=1440,pad=36,measure=canvas.getContext('2d'),columns=model.widths;
+ const canvas=document.createElement('canvas'),pad=36,columns=model.widths,width=columns.reduce((n,value)=>n+value,2*pad),measure=canvas.getContext('2d');
  const prepare=(cells,bold=false)=>cells.map((value,n)=>{measure.font=(bold||n===1?'bold ':'')+'22px Arial';return holdCanvasLines(measure,value,columns[n]-24);});
  const heads=prepare(model.headers,true),headerHeight=Math.max(60,...heads.map(lines=>lines.length*29+24)),rows=model.rows.map(r=>{const lines=prepare(r.cells);return {lines,height:Math.max(66,...lines.map(v=>v.length*29+24))};}),footers=model.footers.map(cells=>{const lines=prepare(cells,true);return {lines,height:Math.max(65,...lines.map(v=>v.length*29+24))};});
  measure.font='21px Arial';const subtitles=holdCanvasLines(measure,model.subtitle,width-2*pad),banner=94+subtitles.length*27,notes=holdCanvasLines(measure,model.note,width-2*pad),height=banner+20+headerHeight+rows.reduce((n,r)=>n+r.height,0)+footers.reduce((n,r)=>n+r.height,0)+44+notes.length*26;

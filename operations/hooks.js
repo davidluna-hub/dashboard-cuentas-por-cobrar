@@ -59,7 +59,7 @@ renderFilteredInvoiceTable=function(rows){
 };
 window.addEventListener?.('beforeunload',e=>{if(localStorage.getItem(localFeatureKey()+'_cloud_pending')){e.preventDefault();e.returnValue='';}});
 const opsResetBeforeOperations=resetCollectionTools;
-resetCollectionTools=function(){opsResetBeforeOperations();operationsState={user:null,ready:false,version:0,payload:{company:{},creditReviews:{},virtuals:[],attachments:[]},error:''};opsBasePayload=null;opsConflict=null;opsAuditRows=[];opsAuditRequest++;opsAuditLoading=false;opsAuditError='';opsPendingActions.clear();opsReportModel=null;opsPendingMessage='';opsDocumentCustomer='';opsDocumentRecord='';opsVirtualCustomer='';for(const id of ['opsPanel','opsExecutive','opsHealth'])if($(id))$(id).innerHTML='';};
+resetCollectionTools=function(){opsResetBeforeOperations();operationsState={user:null,ready:false,version:0,payload:{company:{},creditReviews:{},virtuals:[],attachments:[]},error:''};opsBasePayload=null;opsConflict=null;opsAuditRows=[];opsAuditRequest++;opsAuditLoading=false;opsAuditError='';opsPendingActions.clear();opsReportModel=null;opsReportFilters.customer_id='';opsReportFilters.includeCancelled=false;opsReportPage=0;opsPendingMessage='';opsDocumentCustomer='';opsDocumentRecord='';opsVirtualCustomer='';for(const id of ['opsPanel','opsExecutive','opsHealth'])if($(id))$(id).innerHTML='';};
 
 executiveRisk=function(){const byId=new Map(customerRollup().map(c=>[c.id,c]));return buildHoldReview().filter(r=>r.included&&r.accounts.some(a=>a.currency===selectedCurrency()&&a.debt>0)).map(r=>({...byId.get(r.customer.id),reasons:holdReviewReasons(r)}));};
 
