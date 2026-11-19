@@ -2550,7 +2550,7 @@ function invoiceReport(data,{customer_id,start,end,currency='all',business='all'
  const customer=data.customers.find(c=>c.id===customer_id);
  if(!customer)throw Error('Selecciona un cliente para consultar sus facturas.');
  if(!['all','MXN','USD'].includes(currency))throw Error('Selecciona una moneda válida.');
-  if(!['all','Cartón','Foam','Otro'].includes(business))throw Error('Selecciona un negocio válido.');
+ if(!['all','Cartón','Foam','Otro'].includes(business))throw Error('Selecciona un negocio válido.');
  const currencies=['MXN','USD'].filter(c=>currency==='all'||c===currency),inside=i=>i.invoice_date>=start&&i.invoice_date<=end&&currencies.includes(i.currency)&&(business==='all'||billing.businessLabel(i.business_line)===business);
  const ledger=billing.buildLedger([customer],data.invoices,data.payments||[],data,onDate)[0];
  const active=ledger.all.filter(inside),cancelled=data.invoices.filter(i=>i.customer_id===customer_id&&i.status==='cancelada'&&inside(i));
