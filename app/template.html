@@ -433,7 +433,7 @@ document.addEventListener('click',e=>{
   button.disabled=true;
   try{
    const result=commitInvoicePaymentUnlink(button.dataset.confirmInvoiceUnlink,checked);
-   $('detailModal').classList.remove('open');renderAll();renderPendingInvoices();showMsg('Se desvincularon '+result.count+' aplicación(es) por '+money(result.total,result.currency)+'. La factura recuperó saldo y el ingreso sigue disponible para aplicar.','success');
+   $('detailModal').classList.remove('open');renderAll();renderPendingInvoices();showMsg('Cambio aplicado: se desvincularon '+result.count+' aplicación(es) por '+money(result.total,result.currency)+'. La factura recuperó saldo y el ingreso sigue disponible para aplicar.','success');
   }catch(error){showMsg(error.message||'No se pudieron quitar los abonos.','error');}
   finally{button.disabled=false;}
  }
