@@ -382,7 +382,64 @@ function creditLimit(id,currency){const v=termsFor(id)[currency==='USD'?'limit_u
 function accountSummary(id,currency){const rows=enriched().filter(i=>i.customer_id===id&&i.currency===currency),open=rows.filter(i=>i.balance>0),debt=sum(open,'balance'),credit=availableCredit(id,currency),limit=creditLimit(id,currency);return {rows,open,debt,credit,net:amount(cents(debt)-cents(credit)),overdue:sum(open.filter(i=>i.late>0),'balance'),limit,available:limit===null?null:amount(Math.max(0,cents(limit)-cents(debt))),usage:limit===null?null:limit===0?(debt>0?Infinity:0):debt/limit,exceeded:limit!==null&&cents(debt)>cents(limit)};}
 function customerRollup(){const cur=selectedCurrency();return customers.map(c=>{const a=accountSummary(c.id,cur);return {...c,...a,balance:a.debt,lateCount:a.open.filter(i=>i.late>0).length,maxLate:Math.max(0,...a.open.map(i=>i.late))};}).sort((a,b)=>b.balance-a.balance||b.credit-a.credit||a.legal_name.localeCompare(b.legal_name));}
 function paymentHistoryHTML(i){const ps=invoicePayments(i),transferred=invoiceTransfersCents(i.id);if(!ps.length&&!transferred)return '<span class="meta">Sin abonos</span>';return `<details class="payment-history"><summary>${ps.length} abono(s) · ver detalle</summary><div>${ps.map(p=>`<div class="history-item"><b>${date(p.payment_date)}</b> · <span class="green">${money(p.amount,p.currency)}</span><br><span class="meta">${esc(p.source_invoice_id?'Saldo de factura '+(invoices.find(x=>x.id===p.source_invoice_id)?.invoice_number||'origen'):p.credit_batch_id?'Aplicación de saldo a favor':p.payment_method||'Pago')}${p.reference?' · Ref. '+esc(p.reference):''}</span></div>`).join('')}${transferred?'<div class="history-item"><b>Transferido a otras facturas</b> · '+money(amount(transferred),i.currency)+'</div>':''}</div></details>`;}
-function invoiceRow(i){return '<tr><td>'+date(i.invoice_date)+'</td><td><b>'+esc(i.invoice_number)+'</b></td><td>'+esc(i.customer?.legal_name||'-')+'</td><td>'+businessBadge(i)+'</td><td>'+invoiceDueHTML(i)+'</td><td>'+money(i.total,i.currency)+'</td><td>'+money(i.paid,i.currency)+(i.credited?'<div class="meta">NC: '+money(i.credited,i.currency)+'</div>':'')+(invoiceOverpaymentCents(i)?'<div class="meta green">Excedente a favor: '+money(amount(invoiceOverpaymentCents(i)),i.currency)+'</div>':'')+'</td><td><b>'+money(i.balance,i.currency)+'</b></td><td>'+badge(i)+'</td><td>'+date(lastPaymentDate(i))+'</td><td>'+date(settlementDate(i))+'</td><td>'+paymentHistoryHTML(i)+'</td><td>'+movementMenu('Acciones de factura '+i.invoice_number,'<button type="button" data-edit-invoice="'+esc(i.id)+'">Editar factura</button><button type="button" data-client-statement="'+esc(i.customer_id)+'">Estado de cuenta</button>'+(i.balance>0?'<button type="button" data-new-promise="'+esc(i.id)+'">Agendar promesa</button>':'')+'<button type="button" data-cancel-invoice="'+esc(i.id)+'">Cancelar factura</button><button type="button" class="record-danger" data-archive-kind="invoice" data-archive-id="'+esc(i.id)+'">Eliminar a papelera</button>')+'</td></tr>';}
+
+// Permite desvincular abonos de la factura seleccionada sin borrar el ingreso.
+function invoicePaymentUnlinkOptions(id){
+ const invoice=invoices.find(i=>i.id===id);
+ if(!invoice||invoice.status==='cancelada')throw new Error('No se encontró una factura vigente.');
+ const outgoing=payments.some(p=>p.source_invoice_id===id);
+ return invoicePayments(invoice).map(p=>{
+  const receipt=receipts.find(r=>r.id===p.receipt_id),local=localPayments.some(x=>x.id===p.id);
+  const mixed=!!receipt&&payments.some(x=>x.receipt_id===receipt.id&&!localPayments.some(y=>y.id===x.id));
+  const enabled=!!receipt&&local&&!mixed&&!outgoing;
+  const reason=outgoing?'Hay saldo transferido a otras facturas. Corrige primero esas transferencias.':!receipt||!local?'Pago histórico o aplicación del servidor: usa Pagos y abonos para revisarlo.':mixed?'El ingreso también tiene aplicaciones del servidor. Corrígelas antes de desvincular.':'';
+  return {payment:p,receipt,enabled,reason};
+ });
+}
+function openInvoicePaymentUnlink(id){
+ if(dashboardWriteBlocked())return dashboardDenyWrite();
+ const invoice=invoices.find(i=>i.id===id);if(!invoice)return;
+ const options=invoicePaymentUnlinkOptions(id);
+ const rows=options.map(({payment:p,receipt:r,enabled,reason})=>'<tr><td><input type="checkbox" data-invoice-unlink-payment="'+esc(p.id)+'" '+(enabled?'':'disabled')+' aria-label="Quitar aplicación '+esc(p.id)+'"></td><td>'+date(p.payment_date)+'</td><td>'+money(p.amount,p.currency)+'</td><td>'+esc(p.credit_batch_id?'Saldo a favor':p.payment_method||'Pago')+(r?.reference?'<div class="meta">Ref. '+esc(r.reference)+'</div>':'')+'</td><td>'+(enabled?'Disponible para quitar':'<span class="meta">'+esc(reason)+'</span>')+'</td></tr>');
+ modal('Quitar pagos · '+invoice.invoice_number,'<p class="meta"><b>'+esc(customerName(invoice.customer_id))+'</b> · '+esc(invoice.currency)+' · Factura '+esc(invoice.invoice_number)+'</p><p>Selecciona los abonos que quieres <b>quitar de esta factura</b>. La factura recuperará saldo pendiente y el dinero recibido quedará como saldo a favor del mismo cliente y moneda.</p><div class="table-wrap">'+table(rows,['Elegir','Fecha','Importe','Origen','Disponibilidad'])+'</div><p class="notice">El ingreso original no se borra. Los pagos históricos se corrigen por separado para conservar su trazabilidad.</p><div class="form-actions"><button type="button" class="pill" data-cancel-invoice-unlink>Cancelar</button><button type="button" class="green-btn" data-confirm-invoice-unlink="'+esc(id)+'" '+(options.some(o=>o.enabled)?'':'disabled')+'>Quitar pagos seleccionados</button></div>');
+}
+function commitInvoicePaymentUnlink(id,ids){
+ if(dashboardWriteBlocked())throw new Error('No tienes permiso para cambiar pagos.');
+ if(!featuresReady||!reminderCloud.ready||!reminderCloud.synced||reminderCloud.busy||reminderCloud.queued)throw new Error('Primero actualiza la cartera y confirma que los cambios estén sincronizados.');
+ const selected=new Set(ids);
+ if(!selected.size)throw new Error('Selecciona al menos un abono.');
+ const options=invoicePaymentUnlinkOptions(id),chosen=options.filter(o=>selected.has(o.payment.id));
+ if(chosen.length!==selected.size||chosen.some(o=>!o.enabled))throw new Error('Hay aplicaciones que no pueden desvincularse. Actualiza la cartera y vuelve a revisar.');
+ const groups=new Map();
+ for(const {payment:p,receipt:r} of chosen){const rows=groups.get(r.id)||[];rows.push(p);groups.set(r.id,rows);}
+ for(const receiptId of groups.keys()){
+  const r=receipts.find(r=>r.id===receiptId),remaining=payments.filter(p=>p.receipt_id===receiptId&&!selected.has(p.id)),errors=validateReceiptCorrection(r,r,remaining);
+  if(errors.length)throw new Error(errors.join(' '));
+ }
+ const stamp=new Date().toISOString(),originalReceipts=receipts,originalLocal=localPayments;
+ receipts=receipts.map(r=>groups.has(r.id)?{...r,edit_history:[...(r.edit_history||[]),{at:stamp,kind:'desvincular_factura',invoice_id:id,removed_applications:groups.get(r.id).map(p=>({...p}))}]}:r);
+ localPayments=localPayments.filter(p=>!selected.has(p.id));
+ syncAppliedPayments();
+ try{saveLocalFeatureData();}catch(error){receipts=originalReceipts;localPayments=originalLocal;syncAppliedPayments();throw error;}
+ return {count:chosen.length,total:amount(chosen.reduce((n,o)=>n+cents(o.payment.amount),0)),currency:chosen[0].payment.currency};
+}
+document.addEventListener('click',e=>{
+ const button=e.target.closest('button');if(!button)return;
+ if(button.dataset.manageInvoicePayments){try{openInvoicePaymentUnlink(button.dataset.manageInvoicePayments);}catch(error){showMsg(error.message,'error');}}
+ if(button.hasAttribute('data-cancel-invoice-unlink'))$('detailModal').classList.remove('open');
+ if(button.dataset.confirmInvoiceUnlink){
+  const checked=[...$('detailContent').querySelectorAll('[data-invoice-unlink-payment]:checked')].map(el=>el.dataset.invoiceUnlinkPayment);
+  if(!checked.length){showMsg('Marca los abonos que quieres quitar.','error');return;}
+  button.disabled=true;
+  try{
+   const result=commitInvoicePaymentUnlink(button.dataset.confirmInvoiceUnlink,checked);
+   $('detailModal').classList.remove('open');renderAll();renderPendingInvoices();showMsg('Se desvincularon '+result.count+' aplicación(es) por '+money(result.total,result.currency)+'. La factura recuperó saldo y el ingreso sigue disponible para aplicar.','success');
+  }catch(error){showMsg(error.message||'No se pudieron quitar los abonos.','error');}
+  finally{button.disabled=false;}
+ }
+});
+
+function invoiceRow(i){return '<tr><td>'+date(i.invoice_date)+'</td><td><b>'+esc(i.invoice_number)+'</b></td><td>'+esc(i.customer?.legal_name||'-')+'</td><td>'+businessBadge(i)+'</td><td>'+invoiceDueHTML(i)+'</td><td>'+money(i.total,i.currency)+'</td><td>'+money(i.paid,i.currency)+(i.credited?'<div class="meta">NC: '+money(i.credited,i.currency)+'</div>':'')+(invoiceOverpaymentCents(i)?'<div class="meta green">Excedente a favor: '+money(amount(invoiceOverpaymentCents(i)),i.currency)+'</div>':'')+'</td><td><b>'+money(i.balance,i.currency)+'</b></td><td>'+badge(i)+'</td><td>'+date(lastPaymentDate(i))+'</td><td>'+date(settlementDate(i))+'</td><td>'+paymentHistoryHTML(i)+'</td><td>'+movementMenu('Acciones de factura '+i.invoice_number,'<button type="button" data-edit-invoice="'+esc(i.id)+'">Editar factura</button><button type="button" data-client-statement="'+esc(i.customer_id)+'">Estado de cuenta</button>'+(invoicePayments(i).length?'<button type="button" data-manage-invoice-payments="'+esc(i.id)+'">Quitar pagos aplicados</button>':'')+(i.balance>0?'<button type="button" data-new-promise="'+esc(i.id)+'">Agendar promesa</button>':'')+'<button type="button" data-cancel-invoice="'+esc(i.id)+'">Cancelar factura</button><button type="button" class="record-danger" data-archive-kind="invoice" data-archive-id="'+esc(i.id)+'">Eliminar a papelera</button>')+'</td></tr>';}
 const invoiceHeaders=['Fecha','Factura','Cliente','Negocio','Vencimiento','Total','Abonado','Saldo','Estado','Último abono','Liquidación','Fechas e importes','Acciones'];
 
 // Las promesas se concilian solamente con pagos reales posteriores a su creación.
