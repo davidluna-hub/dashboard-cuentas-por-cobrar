@@ -9,8 +9,14 @@
   return {start,end,number:1+Math.round((Date.parse(start+'T12:00:00Z')-Date.parse(firstMonday+'T12:00:00Z'))/604800000),year};
  }
  function business(invoice){const s=String(invoice?.business_line||'').trim().toLowerCase();return ['carton','cartón','cardboard','corrugated','caja','cajas'].includes(s)?'Cartón':['foam','espuma','foams'].includes(s)?'Foam':'Otro';}
- function weeklyCollections({invoices=[],payments=[],localPayments=[],receipts=[]}={},anchor=today()){
-  const period=week(anchor),inside=d=>d&&d>=period.start&&d<=period.end,byInvoice=new Map(invoices.map(i=>[i.id,i])),merged=new Map();
+ function weeklyCollections(data={},anchor=today()){return buildCollections(data,week(anchor));}
+ function collectionsInRange(data={},start,end){
+  const valid=d=>typeof d==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(d)&&Number.isFinite(Date.parse(d+'T12:00:00Z'))&&new Date(d+'T12:00:00Z').toISOString().slice(0,10)===d;
+  if(!valid(start)||!valid(end)||start>end)throw Error('Selecciona un periodo de cobros válido.');
+  return buildCollections(data,{start,end});
+ }
+ function buildCollections({invoices=[],payments=[],localPayments=[],receipts=[]}={},period){
+  const inside=d=>d&&d>=period.start&&d<=period.end,byInvoice=new Map(invoices.map(i=>[i.id,i])),merged=new Map();
   [...payments,...localPayments].forEach((p,n)=>merged.set(p.id||'row-'+n,p));
   const applications=[...merged.values()],cashMap=new Map(receipts.map((r,n)=>[r.id||'receipt-'+n,r])),movements=[],warnings=[],cashIds=new Set();
   const add=(record,invoice,value,category,source,cashId)=>{if(value<=0)return;movements.push({id:cashId,received_date:record.payment_date,customer_id:record.customer_id||invoice?.customer_id||'',invoice_number:invoice?.invoice_number||'',business:category,currency:record.currency,amount:amount(value),source});cashIds.add(cashId);};
@@ -38,5 +44,5 @@
   return {period,rows,totals:promiseTotals(rows)};
  }
  function promiseTotals(rows){return Object.fromEntries(['MXN','USD'].map(currency=>[currency,Object.fromEntries(['amount','applied','remaining'].map(key=>[key,amount(rows.filter(r=>r.currency===currency).reduce((n,r)=>n+cents(r[key]),0))]))]));}
- const api={today,shift,week,weeklyCollections,promisePublication,promiseTotals};root.ArWeeklyReports=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
+ const api={today,shift,week,business,weeklyCollections,collectionsInRange,promisePublication,promiseTotals};root.ArWeeklyReports=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
 })(globalThis);

@@ -209,8 +209,8 @@
  <div id="collectionToolsStatus" class="meta" role="status" aria-live="polite"></div>
  <!-- AMAO_TRACKING_PANEL_START -->
 <div class="panel tracking-main">
- <div class="panel-head"><div><h2>Reporte de cobranza</h2><p class="sub">Actualiza el comentario de cada cliente y prepara la tabla para WhatsApp.</p></div><button type="button" class="pill" id="trackingAddClient">+ Agregar cliente</button></div>
- <div class="tracking-controls"><label>Abono / pago<select class="field" id="trackingMode"><option value="agreed">Pagos acordados</option><option value="received">Pagos recibidos</option></select></label><label>Periodo<select class="field" id="trackingPeriod"><option value="today">Hoy</option><option value="week">Esta semana</option><option value="next7">Próximos 7 días</option><option value="custom">Fecha específica</option></select></label><label id="trackingDateLabel" hidden>Fecha<input class="field" id="trackingDate" type="date"></label><label>Moneda<select class="field" id="trackingCurrency"><option value="all">Pesos y dólares</option><option value="USD">Solo dólares</option><option value="MXN">Solo pesos</option></select></label><label class="tracking-search-label">Buscar cliente<input class="field" type="search" id="trackingSearch" placeholder="Escribe el nombre"></label></div>
+ <div class="panel-head"><div><h2>Reporte de cobranza</h2><p class="sub">Consulta adeudos y últimos pagos por negocio. Actualiza comentarios y prepara la tabla para WhatsApp.</p></div><button type="button" class="pill" id="trackingAddClient">+ Agregar cliente</button></div>
+ <div class="tracking-controls"><label>Reporte<select class="field" id="trackingMode"><option value="portfolio">Cartera y últimos pagos</option><option value="agreed">Pagos acordados</option><option value="received">Pagos recibidos</option></select></label><label>Negocio<select class="field" id="trackingBusiness"><option value="all">Todos los negocios</option><option value="Foam">Foam</option><option value="Cartón">Cartón</option><option value="Otro">Otro</option></select></label><label>Periodo<select class="field" id="trackingPeriod"><option value="today">Hoy</option><option value="week">Esta semana</option><option value="next7">Próximos 7 días</option><option value="custom">Fecha específica</option></select></label><label id="trackingDateLabel" hidden>Fecha<input class="field" id="trackingDate" type="date"></label><label>Moneda<select class="field" id="trackingCurrency"><option value="all">Pesos y dólares</option><option value="USD">Solo dólares</option><option value="MXN">Solo pesos</option></select></label><label class="tracking-search-label">Buscar cliente<input class="field" type="search" id="trackingSearch" placeholder="Escribe el nombre"></label></div>
  <p class="tracking-help" id="trackingMeaning"></p>
  <div class="tracking-selection"><span id="trackingSelectedCount" class="meta"></span><div><button type="button" class="tracking-link" id="trackingSelectAll">Seleccionar todos</button><button type="button" class="tracking-link" id="trackingSelectNone">Quitar selección</button></div></div>
  <div class="table-wrap tracking-work-table" id="trackingTable"></div>
@@ -1731,48 +1731,7 @@ $('copyHoldTableImage').addEventListener('click',async e=>{
 });
 
 // AMAO_WEEKLY_REPORTS_START
-(function(root){
- 'use strict';
- const cents=n=>Math.round((Number(n)||0)*100),amount=n=>n/100;
- const today=()=>new Intl.DateTimeFormat('en-CA',{timeZone:'America/Ciudad_Juarez',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
- const shift=(d,n)=>{const t=new Date(d+'T12:00:00Z');t.setUTCDate(t.getUTCDate()+n);return t.toISOString().slice(0,10);};
- function week(anchor=today()){
-  const d=new Date(anchor+'T12:00:00Z');if(!/^\d{4}-\d{2}-\d{2}$/.test(anchor)||Number.isNaN(d.getTime())||d.toISOString().slice(0,10)!==anchor)throw Error('Selecciona una fecha válida.');
-  const start=shift(anchor,-((d.getUTCDay()+6)%7)),end=shift(start,6),year=new Date(shift(start,3)+'T12:00:00Z').getUTCFullYear(),jan4=year+'-01-04',firstMonday=shift(jan4,-((new Date(jan4+'T12:00:00Z').getUTCDay()+6)%7));
-  return {start,end,number:1+Math.round((Date.parse(start+'T12:00:00Z')-Date.parse(firstMonday+'T12:00:00Z'))/604800000),year};
- }
- function business(invoice){const s=String(invoice?.business_line||'').trim().toLowerCase();return ['carton','cartón','cardboard','corrugated','caja','cajas'].includes(s)?'Cartón':['foam','espuma','foams'].includes(s)?'Foam':'Otro';}
- function weeklyCollections({invoices=[],payments=[],localPayments=[],receipts=[]}={},anchor=today()){
-  const period=week(anchor),inside=d=>d&&d>=period.start&&d<=period.end,byInvoice=new Map(invoices.map(i=>[i.id,i])),merged=new Map();
-  [...payments,...localPayments].forEach((p,n)=>merged.set(p.id||'row-'+n,p));
-  const applications=[...merged.values()],cashMap=new Map(receipts.map((r,n)=>[r.id||'receipt-'+n,r])),movements=[],warnings=[],cashIds=new Set();
-  const add=(record,invoice,value,category,source,cashId)=>{if(value<=0)return;movements.push({id:cashId,received_date:record.payment_date,customer_id:record.customer_id||invoice?.customer_id||'',invoice_number:invoice?.invoice_number||'',business:category,currency:record.currency,amount:amount(value),source});cashIds.add(cashId);};
-  for(const [id,r]of cashMap){
-   if(!inside(r.payment_date))continue;
-   if(!['MXN','USD'].includes(r.currency)){warnings.push('Ingreso sin moneda válida: '+id);continue;}
-   let left=Math.max(0,cents(r.amount));
-   const assigned=applications.filter(p=>p.receipt_id===id||!p.receipt_id&&p.credit_batch_id===id).sort((a,b)=>String(a.payment_date||'').localeCompare(String(b.payment_date||''))||String(a.id||'').localeCompare(String(b.id||'')));
-   for(const p of assigned){const invoice=byInvoice.get(p.invoice_id),currency=p.currency||invoice?.currency;if(currency&&currency!==r.currency){warnings.push('Aplicación con moneda distinta al ingreso: '+(p.id||id));continue;}const n=Math.max(0,cents(p.amount)),take=Math.min(left,n);add(r,invoice,take,invoice?business(invoice):'Sin clasificar','Ingreso aplicado','receipt:'+id);left-=take;if(n>take)warnings.push('Las aplicaciones superan el ingreso: '+id);}
-   add(r,null,left,'Anticipos sin aplicar','Saldo recibido sin aplicar','receipt:'+id);
-  }
-  for(const p of applications){
-   if(p.receipt_id||p.credit_batch_id){const id=p.receipt_id||p.credit_batch_id;if(!cashMap.has(id)&&inside(p.payment_date))warnings.push('Aplicación sin ingreso original disponible: '+(p.id||id));continue;}
-   if(!inside(p.payment_date))continue;
-   const invoice=byInvoice.get(p.invoice_id),currency=p.currency||invoice?.currency;
-   if(!['MXN','USD'].includes(currency)){warnings.push('Pago histórico sin moneda válida: '+(p.id||''));continue;}
-   add({...p,currency},invoice,Math.max(0,cents(p.amount)),invoice?business(invoice):'Sin clasificar','Pago histórico','payment:'+(p.id||applications.indexOf(p)));
-  }
-  const categories=['Cartón','Foam','Otro','Anticipos sin aplicar','Sin clasificar'],rows=categories.map(name=>({business:name,mxn:amount(movements.filter(m=>m.business===name&&m.currency==='MXN').reduce((n,m)=>n+cents(m.amount),0)),usd:amount(movements.filter(m=>m.business===name&&m.currency==='USD').reduce((n,m)=>n+cents(m.amount),0))})).filter(r=>['Cartón','Foam'].includes(r.business)||r.mxn||r.usd);
-  return {period,rows,movements,totals:{MXN:amount(rows.reduce((n,r)=>n+cents(r.mxn),0)),USD:amount(rows.reduce((n,r)=>n+cents(r.usd),0))},receiptCount:cashIds.size,warnings:[...new Set(warnings)]};
- }
- function promisePublication(details,customers,anchor=today(),status='pending'){
-  const period=week(anchor),names=new Map(customers.map(c=>[c.id,c.legal_name]));
-  const rows=details.filter(p=>!p.plan?.cancelled_at&&p.state!=='cancelled'&&p.scheduled_date>=period.start&&p.scheduled_date<=period.end&&(status==='all'||status==='fulfilled'&&p.state==='fulfilled'||status==='overdue'&&p.state==='overdue'||status==='pending'&&p.state!=='fulfilled')).map(p=>({...p,name:names.get(p.customer_id)||'Cliente sin identificar'})).sort((a,b)=>a.scheduled_date.localeCompare(b.scheduled_date)||a.name.localeCompare(b.name)||String(a.id).localeCompare(String(b.id)));
-  return {period,rows,totals:promiseTotals(rows)};
- }
- function promiseTotals(rows){return Object.fromEntries(['MXN','USD'].map(currency=>[currency,Object.fromEntries(['amount','applied','remaining'].map(key=>[key,amount(rows.filter(r=>r.currency===currency).reduce((n,r)=>n+cents(r[key]),0))]))]));}
- const api={today,shift,week,weeklyCollections,promisePublication,promiseTotals};root.ArWeeklyReports=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
-})(globalThis);
+/* @include weekly-reports-core.js */
 
 /* @include weekly-reports-ui.js */
 
@@ -1785,44 +1744,8 @@ $('copyHoldTableImage').addEventListener('click',async e=>{
 
 /* @include collection-tools/ui.js */
 
-(function(root){
- 'use strict';
- const tools=root.ArCollectionTools||(typeof require==='function'?require('./core.js'):null),weekly=root.ArWeeklyReports||(typeof require==='function'?require('../weekly-reports-core.js'):null),cents=n=>Math.round((Number(n)||0)*100),amount=n=>n/100;
- const key=(id,currency)=>id+'|'+currency;
- const shortDate=d=>tools.validDate(d)?d.slice(8,10)+'-'+d.slice(5,7)+'-'+d.slice(2,4):'';
- const money=n=>n?new Intl.NumberFormat('es-MX',{style:'currency',currency:'MXN',minimumFractionDigits:2}).format(n):'—';
- function period(day,selection='today',date=null){if(selection==='custom'&&tools.validDate(date))return {start:date,end:date,label:'Fecha específica'};if(selection==='week')return {...weekly.week(day),label:'Esta semana'};return {start:day,end:selection==='next7'?weekly.shift(day,6):day,label:selection==='next7'?'Próximos 7 días':'Hoy'};}
- function report(data,activities=[],options={}){
-  const day=options.day||tools.day(),range=period(day,options.period||'today',options.date),mode=options.mode==='received'?'received':'agreed',inside=d=>d&&d>=range.start&&d<=range.end,source=tools.sourceAt(data,day),ledger=options.ledger||tools.accounts(source,day),invoices=new Map((data.invoices||[]).map(i=>[i.id,i])),cash=new Map(),starts=new Set();
-  for(let d=weekly.week(range.start).start;d<=range.end;d=weekly.shift(d,7))starts.add(d);
-  if(mode==='received')for(const start of starts)for(const m of weekly.weeklyCollections(source,start).movements){if(!inside(m.received_date))continue;const k=key(m.customer_id,m.currency),old=cash.get(k)||{value:0,date:null};old.value+=cents(m.amount);if(!old.date||m.received_date>old.date)old.date=m.received_date;cash.set(k,old);}
-  const added=new Set(options.added||[]),excluded=new Set(options.excluded||[]),rows=[];
-  for(const a of ledger)for(const currency of ['USD','MXN']){
-   if(options.currency&&options.currency!=='all'&&options.currency!==currency)continue;
-   const k=key(a.customer.id,currency),open=a.open.filter(i=>i.currency===currency),debt=amount(open.reduce((n,i)=>n+cents(i.balance),0)),overdue=amount(open.filter(i=>i.late>0).reduce((n,i)=>n+cents(i.balance),0));
-   const notes=activities.filter(t=>t.customer_id===a.customer.id&&t.followup_status!=='cancelled'&&t.happened_on<=day&&(!t.report_currency||t.report_currency===currency)&&(!t.invoice_id||invoices.get(t.invoice_id)?.currency===currency)).sort((x,y)=>y.happened_on.localeCompare(x.happened_on)||String(y.updated_at||y.created_at).localeCompare(String(x.updated_at||x.created_at))||String(y.id).localeCompare(String(x.id)));
-   const latest=notes[0],override=notes.find(n=>n.report_currency===currency&&['auto','manual'].includes(n.report_amount_mode)),promises=a.commitments.filter(p=>p.currency===currency&&inside(p.scheduled_date)).sort((x,y)=>x.scheduled_date.localeCompare(y.scheduled_date));
-   // Cap suggested agreements to remaining debt; a report override never changes the financial ledger.
-   const promised=Math.min(cents(debt),promises.reduce((n,p)=>n+cents(p.remaining),0));
-   let value=amount(promised),paymentDate=promises[0]?.scheduled_date||null,origin='Promesas registradas';
-   if(mode==='received'){const paid=cash.get(k);value=amount(paid?.value||0);paymentDate=paid?.date||null;origin='Dinero recibido';}
-   else if(override?.report_amount_mode==='manual'&&inside(override.report_payment_on)){value=amount(Math.max(0,cents(override.report_amount)));paymentDate=override.report_payment_on;origin='Acuerdo capturado en seguimiento';}
-   if(!value)paymentDate=null;
-   const rawComment=latest?(latest.report_comment??latest.notes??''):'',comment=rawComment.length>240?rawComment.slice(0,237)+'…':rawComment;
-   if(!overdue&&!value&&!added.has(k))continue;
-   rows.push({key:k,customer_id:a.customer.id,name:a.customer.legal_name,currency,debt,overdue,payment:value,paymentDate,comment,fullComment:rawComment,origin,latest,override,selected:!excluded.has(k),manuallyAdded:added.has(k),dateComment:[shortDate(paymentDate),comment].filter(Boolean).join('\n')||'SIN COMENTARIO'});
-  }
-  rows.sort((a,b)=>(a.currency==='USD'?0:1)-(b.currency==='USD'?0:1)||b.overdue-a.overdue||a.name.localeCompare(b.name));
-  return {day,range,mode,rows,totals:totals(rows.filter(r=>r.selected))};
- }
- function totals(rows){return Object.fromEntries(['USD','MXN'].map(currency=>[currency,{payment:amount(rows.filter(r=>r.currency===currency).reduce((n,r)=>n+cents(r.payment),0)),overdue:amount(rows.filter(r=>r.currency===currency).reduce((n,r)=>n+cents(r.overdue),0))}]));}
- function publication(report,page=0){
-  const selected=report.rows.filter(r=>r.selected),pages=[];for(let n=0;n<selected.length;n+=20)pages.push(selected.slice(n,n+20));if(!pages.length)pages.push([]);const index=Math.max(0,Math.min(pages.length-1,page)),rows=pages[index],sum=totals(rows);
-  return {key:'seguimiento_cobranza',title:'Seguimiento de cobranza',subtitle:(report.mode==='received'?'Pagos recibidos':'Pagos acordados')+' · '+shortDate(report.range.start)+(report.range.end!==report.range.start?' al '+shortDate(report.range.end):'')+' · Corte '+shortDate(report.day)+' · Imagen '+(index+1)+' de '+pages.length,headers:['MONEDA','CLIENTE','ABONO / PAGO','VENCIDO','FECHA / COMENTARIO'],widths:[125,395,220,220,408],aligns:['left','left','right','right','left'],rows:rows.map(r=>({cells:[r.currency,r.name,money(r.payment),money(r.overdue),r.dateComment]})),footers:['USD','MXN'].filter(c=>rows.some(r=>r.currency===c)).map(c=>[c,'Total de esta imagen',money(sum[c].payment),money(sum[c].overdue),'']),empty:'No hay clientes seleccionados.',note:(report.mode==='received'?'Abono/pago: dinero recibido en el periodo, incluidos anticipos.':'Abono/pago: importe acordado por cobrar.')+' Vencido: saldo actual al '+shortDate(report.day)+'. Totales de esta imagen, separados por moneda.',index,pages,period:report.range};
- }
- function text(report){const out=['AMAO | Seguimiento de cobranza',(report.mode==='received'?'Pagos recibidos':'Pagos acordados')+' · '+shortDate(report.range.start)+' al '+shortDate(report.range.end),'Vencido al '+shortDate(report.day),'Moneda | Cliente | Abono/Pago | Vencido | Fecha/Comentario',''];for(const r of report.rows.filter(r=>r.selected))out.push([r.currency,r.name,money(r.payment),money(r.overdue),r.dateComment.replace(/\n/g,' · ')].join(' | '));for(const c of ['USD','MXN'])out.push('TOTAL '+c+' | Abono/Pago '+money(report.totals[c].payment)+' | Vencido '+money(report.totals[c].overdue));return out.join('\n');}
- const api={key,shortDate,money,period,report,totals,publication,text};root.ArCollectionTracking=api;if(typeof module!=='undefined'&&module.exports)module.exports=api;
-})(globalThis);
+/* @include collection-tools/tracking-business-core.js */
+/* @include collection-tools/tracking-core.js */
 
 /* @include collection-tools/tracking-ui.js */
 
